@@ -492,6 +492,35 @@
     margin-bottom: 1rem;
   }
 
+  /* ── TASKS LANES ── */
+  .tasks-lanes { display: flex; flex-direction: column; gap: 1rem; margin-bottom: 0.5rem; }
+
+  .task-lane { background: var(--surface2); border-radius: 10px; padding: 0.8rem; }
+  .task-lane-header {
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 0.6rem; padding-bottom: 6px;
+    border-bottom: 2px solid;
+    font-size: 0.82rem; font-weight: 500;
+  }
+  .task-lane:nth-child(1) .task-lane-header { border-color: var(--m1); color: var(--m1); }
+  .task-lane:nth-child(2) .task-lane-header { border-color: var(--m2); color: var(--m2); }
+  .task-lane:nth-child(3) .task-lane-header { border-color: var(--m3); color: var(--m3); }
+  .task-lane:nth-child(4) .task-lane-header { border-color: var(--m4); color: var(--m4); }
+  .task-lane-count { margin-left: auto; color: var(--muted); font-size: 0.72rem; }
+  .task-lane-items { display: flex; flex-direction: column; gap: 4px; }
+
+  .member-select {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.85rem;
+    padding: 7px 10px;
+    outline: none;
+    flex-shrink: 0;
+  }
+
   /* ── REFRESH SPINNER ── */
   .spin { animation: spin 1s linear infinite; display: inline-block; }
 
@@ -534,7 +563,13 @@
 <div id="setup-modal">
   <div class="modal-box">
     <h2>Set up your family</h2>
-    <p class="subtitle">Enter each family member's name and their Google Calendar ID (found in Calendar Settings → Integrate calendar). You can update these later.</p>
+    <p class="subtitle">Enter the shared family calendar ID, then each member's name and their Google Tasks list name. The Tasks list name must match exactly what's in Google Tasks (e.g. "Mum's Tasks"). New lists are created automatically if the name doesn't match an existing one.</p>
+    <div style="margin-bottom:1.4rem;">
+      <div class="member-row" style="border-color:var(--accent2);">
+        <label>Shared Family Calendar ID</label>
+        <input type="text" id="cal-id-input" placeholder="e.g. family@group.calendar.google.com or email@gmail.com">
+      </div>
+    </div>
     <div class="member-setup" id="member-setup"></div>
     <button class="btn-primary" id="save-setup-btn">Save & Open Dashboard →</button>
   </div>
@@ -607,10 +642,11 @@
           <span class="card-title"><span class="icon">✓</span> Tasks</span>
           <span class="card-meta" id="tasks-meta"></span>
         </div>
-        <div id="tasks-list" class="tasks-list">
+        <div id="tasks-lanes" class="tasks-lanes">
           <div class="loading">Fetching tasks…</div>
         </div>
         <div class="add-task-row">
+          <select class="member-select" id="task-member-select"></select>
           <input class="add-task-input" id="new-task-input" placeholder="Add a task…" />
           <button class="add-task-btn" id="add-task-btn">Add</button>
         </div>
@@ -628,7 +664,7 @@
 //  CONFIGURATION — replace CLIENT_ID with yours
 // ─────────────────────────────────────────────
 const CONFIG = {
-  CLIENT_ID: '989016016430-9mjfg95r67vn7v0p6segc8e40so33lp1.apps.googleusercontent.com',
+  CLIENT_ID: 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com',
   SCOPES: [
     'https://www.googleapis.com/auth/calendar.readonly',
     'https://www.googleapis.com/auth/tasks'
@@ -636,16 +672,15 @@ const CONFIG = {
 };
 
 const MEMBER_COLORS = ['var(--m1)', 'var(--m2)', 'var(--m3)', 'var(--m4)'];
-const MEMBER_LABELS = ['m1', 'm2', 'm3', 'm4'];
 
 // ─────────────────────────────────────────────
 //  STATE
 // ─────────────────────────────────────────────
 let accessToken = null;
-let members = [];           // [{name, calendarId, color}]
-let allEvents = [];         // flat list from all calendars
-let tasks = [];             // from Google Tasks default list
-let taskListId = null;
+let calendarId = '';        // single shared family calendar
+let members = [];           // [{name, taskListId, taskListName, color}]
+let allEvents = [];         // flat from shared calendar
+let memberTasks = {};       // { memberIdx: [tasks] }
 let selectedDate = null;    // Date object — null means "show all"
 
 // ─────────────────────────────────────────────
@@ -653,11 +688,16 @@ let selectedDate = null;    // Date object — null means "show all"
 // ─────────────────────────────────────────────
 const $ = id => document.getElementById(id);
 
-function saveMembers(m) {
+function saveConfig(cal, m) {
+  localStorage.setItem('family_calendar', cal);
   localStorage.setItem('family_members', JSON.stringify(m));
 }
-function loadMembers() {
-  try { return JSON.parse(localStorage.getItem('family_members') || '[]'); } catch { return []; }
+function loadConfig() {
+  try {
+    const cal = localStorage.getItem('family_calendar') || '';
+    const mem = JSON.parse(localStorage.getItem('family_members') || '[]');
+    return { cal, mem };
+  } catch { return { cal: '', mem: [] }; }
 }
 
 function formatTime(dateStr) {
@@ -785,21 +825,21 @@ window.addEventListener('load', () => {
 //  POST SIGN-IN FLOW
 // ─────────────────────────────────────────────
 function onSignedIn() {
-  // Fetch user profile for header + save hint for silent refresh
   fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
     headers: { Authorization: `Bearer ${accessToken}` }
   }).then(r => r.json()).then(profile => {
-    // Save email as login_hint for future silent sign-ins
     if (profile.email) localStorage.setItem('gsi_hint', profile.email);
-
     $('user-info').innerHTML = `
       ${profile.picture ? `<img src="${profile.picture}" alt="">` : ''}
       <span>${profile.name || profile.email}</span>
     `;
   });
 
-  members = loadMembers();
-  if (!members || members.length < 1) {
+  const cfg = loadConfig();
+  calendarId = cfg.cal;
+  members = cfg.mem;
+
+  if (!calendarId || !members.length) {
     showSetupModal();
   } else {
     showDashboard();
@@ -813,6 +853,9 @@ function showSetupModal() {
   $('auth-screen').style.display = 'none';
   $('setup-modal').classList.add('open');
 
+  // Pre-fill calendar ID
+  $('cal-id-input').value = calendarId || '';
+
   const container = $('member-setup');
   container.innerHTML = '';
   for (let i = 0; i < 4; i++) {
@@ -822,27 +865,67 @@ function showSetupModal() {
     div.innerHTML = `
       <label>Member ${i + 1} — Name</label>
       <input type="text" id="m-name-${i}" placeholder="e.g. Mum" value="${m.name || ''}">
-      <label>Google Calendar ID <span style="color:var(--muted);font-size:0.7rem">(e.g. someone@gmail.com or long ID)</span></label>
-      <input type="text" id="m-cal-${i}" placeholder="email@gmail.com or calendar ID" value="${m.calendarId || ''}">
+      <label>Google Tasks List Name <span style="color:var(--muted);font-size:0.7rem">(must match exactly, e.g. "Mum's Tasks")</span></label>
+      <input type="text" id="m-tasklist-${i}" placeholder="e.g. Mum's Tasks" value="${m.taskListName || ''}">
     `;
     container.appendChild(div);
   }
 
-  $('save-setup-btn').onclick = () => {
+  $('save-setup-btn').onclick = async () => {
+    const newCalId = $('cal-id-input').value.trim();
+    if (!newCalId) { alert('Please enter the shared family Calendar ID.'); return; }
+
     const newMembers = [];
     for (let i = 0; i < 4; i++) {
       const name = $(`m-name-${i}`).value.trim();
-      const calendarId = $(`m-cal-${i}`).value.trim();
-      if (name || calendarId) {
-        newMembers.push({ name: name || `Member ${i+1}`, calendarId, color: MEMBER_COLORS[i] });
+      const taskListName = $(`m-tasklist-${i}`).value.trim();
+      if (name) {
+        newMembers.push({ name, taskListName, taskListId: null, color: MEMBER_COLORS[i] });
       }
     }
     if (!newMembers.length) { alert('Please enter at least one family member.'); return; }
+
+    calendarId = newCalId;
     members = newMembers;
-    saveMembers(members);
+    saveConfig(calendarId, members);
+
+    // Resolve task list IDs from names
+    await resolveTaskListIds();
+
     $('setup-modal').classList.remove('open');
     showDashboard();
   };
+}
+
+// Match task list names to real Google Tasks list IDs (or create if missing)
+async function resolveTaskListIds() {
+  try {
+    const res = await fetch('https://tasks.googleapis.com/tasks/v1/users/@me/lists?maxResults=20', {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
+    const data = await res.json();
+    if (data.error) return;
+    const lists = data.items || [];
+
+    for (const member of members) {
+      if (!member.taskListName) continue;
+      const match = lists.find(l => l.title.toLowerCase() === member.taskListName.toLowerCase());
+      if (match) {
+        member.taskListId = match.id;
+      } else {
+        // Create the list
+        const cr = await fetch('https://tasks.googleapis.com/tasks/v1/users/@me/lists', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title: member.taskListName })
+        });
+        const created = await cr.json();
+        member.taskListId = created.id;
+      }
+    }
+    // Persist resolved IDs
+    saveConfig(calendarId, members);
+  } catch(e) { console.error('resolveTaskListIds error', e); }
 }
 
 // ─────────────────────────────────────────────
@@ -877,6 +960,10 @@ function showDashboard() {
       $('auth-screen').style.display = 'flex';
     });
   };
+
+  // Populate member selector
+  const sel = $('task-member-select');
+  sel.innerHTML = members.map((m, i) => `<option value="${i}">${m.name}</option>`).join('');
 
   $('add-task-btn').onclick = addTask;
   $('new-task-input').addEventListener('keydown', e => { if (e.key === 'Enter') addTask(); });
@@ -959,32 +1046,41 @@ async function loadAllData() {
 
 async function loadCalendars() {
   allEvents = [];
+  if (!calendarId) { renderDateStrip([]); renderLanes(); renderEvents(); updateStats(); return; }
+
   const now = new Date();
   const end = new Date(now);
   end.setDate(now.getDate() + 30);
 
-  const fetches = members.map((member, idx) => {
-    if (!member.calendarId) return Promise.resolve([]);
-    const calId = encodeURIComponent(member.calendarId);
-    const url = `https://www.googleapis.com/calendar/v3/calendars/${calId}/events?`
-      + `timeMin=${now.toISOString()}&timeMax=${end.toISOString()}`
-      + `&singleEvents=true&orderBy=startTime&maxResults=50`;
-    return fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } })
-      .then(r => r.json())
-      .then(data => {
-        if (data.error) { console.warn('Calendar error for', member.name, data.error.message); return []; }
-        return (data.items || []).map(ev => ({
-          ...ev,
-          _memberName: member.name,
-          _memberColor: member.color,
-          _memberIdx: idx
-        }));
-      })
-      .catch(err => { console.error(err); return []; });
-  });
+  const calId = encodeURIComponent(calendarId);
+  const url = `https://www.googleapis.com/calendar/v3/calendars/${calId}/events?`
+    + `timeMin=${now.toISOString()}&timeMax=${end.toISOString()}`
+    + `&singleEvents=true&orderBy=startTime&maxResults=100`;
 
-  const results = await Promise.all(fetches);
-  allEvents = results.flat().sort((a, b) => getEventStart(a) - getEventStart(b));
+  try {
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error.message);
+
+    const events = data.items || [];
+
+    // Tag each event with which members it belongs to (by name match in title/description)
+    allEvents = events.map(ev => {
+      const text = ((ev.summary || '') + ' ' + (ev.description || '')).toLowerCase();
+      const matched = members.filter(m => text.includes(m.name.toLowerCase()));
+      // If no name matches, treat as "family" event — assign to all
+      const assignedMembers = matched.length ? matched : members;
+      return {
+        ...ev,
+        _memberName: assignedMembers.map(m => m.name).join(', '),
+        _memberColor: assignedMembers[0].color,
+        _memberIndices: assignedMembers.map((m, _) => members.indexOf(m))
+      };
+    }).sort((a, b) => getEventStart(a) - getEventStart(b));
+
+  } catch(err) {
+    console.error('Calendar load error:', err);
+  }
 
   renderDateStrip(allEvents);
   renderLanes();
@@ -999,21 +1095,20 @@ function renderLanes() {
   const grid = $('lanes-grid');
   grid.innerHTML = '';
 
-  const filteredEvents = selectedDate
+  const dateFiltered = selectedDate
     ? allEvents.filter(ev => getEventStart(ev) >= startOfDay(selectedDate))
     : allEvents;
 
   updateDateLabel();
 
   members.forEach((member, idx) => {
-    const memberEvents = filteredEvents
-      .filter(ev => ev._memberIdx === idx)
+    // Show events that mention this member's name, or untagged family events
+    const memberEvents = dateFiltered
+      .filter(ev => ev._memberIndices && ev._memberIndices.includes(idx))
       .slice(0, 8);
 
     const lane = document.createElement('div');
     lane.className = 'lane';
-
-    const colorVar = MEMBER_COLORS[idx];
     lane.innerHTML = `
       <div class="lane-header">
         <div class="lane-avatar">${initials(member.name)}</div>
@@ -1031,7 +1126,6 @@ function renderLanes() {
     }
 
     memberEvents.forEach(ev => {
-      const start = getEventStart(ev);
       const isAllDay = !ev.start.dateTime;
       const div = document.createElement('div');
       div.className = 'lane-event';
@@ -1101,121 +1195,141 @@ function updateStats() {
   const today = new Date();
   const todayEvents = allEvents.filter(ev => isSameDay(getEventStart(ev), today));
   $('stat-events').textContent = todayEvents.length;
-  const openTasks = tasks.filter(t => t.status !== 'completed').length;
+  const openTasks = Object.values(memberTasks).flat().filter(t => t.status !== 'completed').length;
   $('stat-tasks').textContent = openTasks;
 }
 
 // ─────────────────────────────────────────────
-//  TASKS
+//  TASKS — per-member lists
 // ─────────────────────────────────────────────
 async function loadTasks() {
-  try {
-    // Get default task list
-    const listsRes = await fetch('https://tasks.googleapis.com/tasks/v1/users/@me/lists?maxResults=10', {
-      headers: { Authorization: `Bearer ${accessToken}` }
-    });
-    const listsData = await listsRes.json();
-    if (listsData.error) throw new Error(listsData.error.message);
+  const container = $('tasks-lanes');
+  container.innerHTML = '<div class="loading">Fetching tasks…</div>';
 
-    // Use first list (usually "My Tasks")
-    const list = listsData.items?.[0];
-    if (!list) { renderTasks([]); return; }
-    taskListId = list.id;
+  // Ensure task list IDs are resolved
+  const needsResolve = members.some(m => m.taskListName && !m.taskListId);
+  if (needsResolve) await resolveTaskListIds();
 
-    const tasksRes = await fetch(`https://tasks.googleapis.com/tasks/v1/lists/${taskListId}/tasks?showCompleted=true&maxResults=50`, {
-      headers: { Authorization: `Bearer ${accessToken}` }
-    });
-    const tasksData = await tasksRes.json();
-    if (tasksData.error) throw new Error(tasksData.error.message);
-
-    tasks = (tasksData.items || []).sort((a, b) => {
-      if (a.status === 'completed' && b.status !== 'completed') return 1;
-      if (b.status === 'completed' && a.status !== 'completed') return -1;
-      return 0;
-    });
-
-    renderTasks(tasks);
-    updateStats();
-    $('tasks-meta').textContent = `${tasks.filter(t => t.status !== 'completed').length} open`;
-  } catch (err) {
-    $('tasks-list').innerHTML = `<div class="error-banner">Could not load tasks: ${err.message}</div>`;
-  }
-}
-
-function renderTasks(taskList) {
-  const container = $('tasks-list');
-  if (!taskList.length) {
-    container.innerHTML = `<div class="empty">No tasks yet. Add one below!</div>`;
-    return;
-  }
-
-  container.innerHTML = '';
-  taskList.forEach(task => {
-    const done = task.status === 'completed';
-    const item = document.createElement('div');
-    item.className = 'task-item' + (done ? ' done' : '');
-    item.dataset.id = task.id;
-    item.innerHTML = `
-      <div class="task-check">${done ? '✓' : ''}</div>
-      <div class="task-body">
-        <div class="task-title">${task.title || '(No title)'}</div>
-        ${task.due ? `<div class="task-due">Due ${formatDate(task.due)}</div>` : ''}
-      </div>
-    `;
-    item.addEventListener('click', () => toggleTask(task));
-    container.appendChild(item);
+  const fetches = members.map(async (member, idx) => {
+    if (!member.taskListId) return [];
+    try {
+      const res = await fetch(
+        `https://tasks.googleapis.com/tasks/v1/lists/${member.taskListId}/tasks?showCompleted=true&maxResults=30`,
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      );
+      const data = await res.json();
+      if (data.error) throw new Error(data.error.message);
+      return (data.items || []).sort((a, b) => {
+        if (a.status === 'completed' && b.status !== 'completed') return 1;
+        if (b.status === 'completed' && a.status !== 'completed') return -1;
+        return 0;
+      });
+    } catch(e) { console.error(`Tasks error for ${member.name}:`, e); return []; }
   });
+
+  const results = await Promise.all(fetches);
+  members.forEach((_, idx) => { memberTasks[idx] = results[idx]; });
+
+  renderTaskLanes();
+  updateStats();
 }
 
-async function toggleTask(task) {
+function renderTaskLanes() {
+  const container = $('tasks-lanes');
+  container.innerHTML = '';
+
+  let totalOpen = 0;
+  members.forEach((member, idx) => {
+    const taskList = memberTasks[idx] || [];
+    const open = taskList.filter(t => t.status !== 'completed').length;
+    totalOpen += open;
+
+    const lane = document.createElement('div');
+    lane.className = 'task-lane';
+    lane.innerHTML = `
+      <div class="task-lane-header">
+        <span>${member.name}</span>
+        <span class="task-lane-count">${open} open</span>
+      </div>
+      <div class="task-lane-items" id="task-lane-items-${idx}"></div>
+    `;
+    container.appendChild(lane);
+
+    const itemsEl = lane.querySelector(`#task-lane-items-${idx}`);
+    if (!taskList.length) {
+      itemsEl.innerHTML = `<div class="empty" style="padding:0.5rem 0;font-size:0.78rem;">No tasks</div>`;
+      return;
+    }
+
+    taskList.forEach(task => {
+      const done = task.status === 'completed';
+      const item = document.createElement('div');
+      item.className = 'task-item' + (done ? ' done' : '');
+      item.innerHTML = `
+        <div class="task-check">${done ? '✓' : ''}</div>
+        <div class="task-body">
+          <div class="task-title">${task.title || '(No title)'}</div>
+          ${task.due ? `<div class="task-due">Due ${formatDate(task.due)}</div>` : ''}
+        </div>
+      `;
+      item.addEventListener('click', () => toggleTask(task, idx));
+      itemsEl.appendChild(item);
+    });
+  });
+
+  $('tasks-meta').textContent = `${totalOpen} open`;
+}
+
+async function toggleTask(task, memberIdx) {
+  const member = members[memberIdx];
+  if (!member?.taskListId) return;
   const newStatus = task.status === 'completed' ? 'needsAction' : 'completed';
   try {
-    const res = await fetch(`https://tasks.googleapis.com/tasks/v1/lists/${taskListId}/tasks/${task.id}`, {
-      method: 'PATCH',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ status: newStatus, completed: newStatus === 'completed' ? new Date().toISOString() : null })
-    });
+    const res = await fetch(
+      `https://tasks.googleapis.com/tasks/v1/lists/${member.taskListId}/tasks/${task.id}`,
+      {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus, completed: newStatus === 'completed' ? new Date().toISOString() : null })
+      }
+    );
     const updated = await res.json();
-    const idx = tasks.findIndex(t => t.id === task.id);
-    if (idx !== -1) { tasks[idx] = updated; }
-    renderTasks(tasks.sort((a, b) => {
+    const list = memberTasks[memberIdx] || [];
+    const i = list.findIndex(t => t.id === task.id);
+    if (i !== -1) list[i] = updated;
+    memberTasks[memberIdx] = list.sort((a, b) => {
       if (a.status === 'completed' && b.status !== 'completed') return 1;
       if (b.status === 'completed' && a.status !== 'completed') return -1;
       return 0;
-    }));
+    });
+    renderTaskLanes();
     updateStats();
-    $('tasks-meta').textContent = `${tasks.filter(t => t.status !== 'completed').length} open`;
-  } catch (err) {
-    console.error('Task toggle error:', err);
-  }
+  } catch(err) { console.error('Task toggle error:', err); }
 }
 
 async function addTask() {
   const input = $('new-task-input');
   const title = input.value.trim();
-  if (!title || !taskListId) return;
+  const memberIdx = parseInt($('task-member-select').value);
+  const member = members[memberIdx];
+  if (!title || !member?.taskListId) return;
   input.value = '';
 
   try {
-    const res = await fetch(`https://tasks.googleapis.com/tasks/v1/lists/${taskListId}/tasks`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ title, status: 'needsAction' })
-    });
+    const res = await fetch(
+      `https://tasks.googleapis.com/tasks/v1/lists/${member.taskListId}/tasks`,
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, status: 'needsAction' })
+      }
+    );
     const newTask = await res.json();
-    tasks.unshift(newTask);
-    renderTasks(tasks);
+    if (!memberTasks[memberIdx]) memberTasks[memberIdx] = [];
+    memberTasks[memberIdx].unshift(newTask);
+    renderTaskLanes();
     updateStats();
-    $('tasks-meta').textContent = `${tasks.filter(t => t.status !== 'completed').length} open`;
-  } catch (err) {
-    console.error('Add task error:', err);
-  }
+  } catch(err) { console.error('Add task error:', err); }
 }
 
 function showError(msg) {
