@@ -499,13 +499,21 @@
 
 <!-- ── AUTH SCREEN ── -->
 <div id="auth-screen">
-  <div class="ornament">🏠</div>
-  <h1>Family Dashboard</h1>
-  <p>Your family's week, at a glance</p>
-  <button class="btn-google" id="sign-in-btn">
-    <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
-    Sign in with Google
-  </button>
+  <div id="auth-inner">
+    <div class="ornament">🏠</div>
+    <h1>Family Dashboard</h1>
+    <p>Your family's week, at a glance</p>
+    <button class="btn-google" id="sign-in-btn">
+      <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+      Sign in with Google
+    </button>
+  </div>
+  <!-- Shown during silent token attempt -->
+  <div id="silent-loading" style="display:none;flex-direction:column;align-items:center;gap:1rem;">
+    <div class="ornament">🏠</div>
+    <div style="color:var(--muted);font-size:0.9rem;">Signing you back in…</div>
+    <div style="width:28px;height:28px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite;"></div>
+  </div>
 </div>
 
 <!-- ── SETUP MODAL ── -->
@@ -606,7 +614,7 @@
 //  CONFIGURATION — replace CLIENT_ID with yours
 // ─────────────────────────────────────────────
 const CONFIG = {
-  CLIENT_ID: '989016016430-9mjfg95r67vn7v0p6segc8e40so33lp1.apps.googleusercontent.com',
+  CLIENT_ID: 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com',
   SCOPES: [
     'https://www.googleapis.com/auth/calendar.readonly',
     'https://www.googleapis.com/auth/tasks'
@@ -685,36 +693,85 @@ function startClock() {
 }
 
 // ─────────────────────────────────────────────
-//  GOOGLE OAUTH (tokenClient approach)
+//  GOOGLE OAUTH — silent refresh + manual sign-in
 // ─────────────────────────────────────────────
 let tokenClient;
+let tokenExpiryTimer = null;
 
 function initGoogleAuth() {
-  google.accounts.id.initialize({
-    client_id: CONFIG.CLIENT_ID,
-    callback: () => {}
-  });
-
   tokenClient = google.accounts.oauth2.initTokenClient({
     client_id: CONFIG.CLIENT_ID,
     scope: CONFIG.SCOPES,
+    // Called for both silent and interactive token grants
     callback: (tokenResponse) => {
       if (tokenResponse.error) {
-        showError('Authentication error: ' + tokenResponse.error);
+        // Silent attempt failed — show sign-in button
+        showSignInPrompt();
         return;
       }
       accessToken = tokenResponse.access_token;
+      scheduleTokenRefresh(tokenResponse.expires_in || 3600);
       onSignedIn();
-    }
+    },
+    // Required for silent refresh — suppress the consent UI when hint is set
+    prompt: ''
   });
 
   $('sign-in-btn').addEventListener('click', () => {
-    tokenClient.requestAccessToken({ prompt: 'consent' });
+    // Full interactive flow — show account picker + consent if needed
+    tokenClient.requestAccessToken({ prompt: 'select_account' });
   });
+
+  // Try a silent token request on page load using the last-used hint
+  attemptSilentSignIn();
+}
+
+function attemptSilentSignIn() {
+  // Show spinner, hide sign-in button while we try
+  $('auth-inner').style.display = 'none';
+  $('silent-loading').style.display = 'flex';
+
+  const hint = localStorage.getItem('gsi_hint');
+  if (!hint) {
+    // No previous session — go straight to sign-in screen
+    showSignInPrompt();
+    return;
+  }
+
+  // Ask GSI for a token silently — no UI shown if it works
+  tokenClient.requestAccessToken({ prompt: '', login_hint: hint });
+
+  // If GSI doesn't call back within 4s, fall back to sign-in screen
+  const fallback = setTimeout(showSignInPrompt, 4000);
+
+  // Patch callback to clear fallback timer on success
+  const originalCallback = tokenClient.callback;
+  tokenClient.callback = (resp) => {
+    clearTimeout(fallback);
+    tokenClient.callback = originalCallback; // restore
+    originalCallback(resp);
+  };
+}
+
+function showSignInPrompt() {
+  $('silent-loading').style.display = 'none';
+  $('auth-inner').style.display = 'flex';
+  $('auth-screen').style.display = 'flex';
+}
+
+// Proactively refresh the token 5 minutes before expiry
+function scheduleTokenRefresh(expiresInSeconds) {
+  if (tokenExpiryTimer) clearTimeout(tokenExpiryTimer);
+  const refreshIn = Math.max((expiresInSeconds - 300) * 1000, 30000);
+  tokenExpiryTimer = setTimeout(() => {
+    const hint = localStorage.getItem('gsi_hint');
+    if (hint) {
+      tokenClient.requestAccessToken({ prompt: '', login_hint: hint });
+    }
+  }, refreshIn);
 }
 
 window.addEventListener('load', () => {
-  // Wait for GSI to load
   let tries = 0;
   const wait = setInterval(() => {
     tries++;
@@ -722,7 +779,7 @@ window.addEventListener('load', () => {
       clearInterval(wait);
       initGoogleAuth();
     }
-    if (tries > 30) clearInterval(wait);
+    if (tries > 30) { clearInterval(wait); showSignInPrompt(); }
   }, 200);
 });
 
@@ -730,10 +787,13 @@ window.addEventListener('load', () => {
 //  POST SIGN-IN FLOW
 // ─────────────────────────────────────────────
 function onSignedIn() {
-  // Fetch user profile for header
+  // Fetch user profile for header + save hint for silent refresh
   fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
     headers: { Authorization: `Bearer ${accessToken}` }
   }).then(r => r.json()).then(profile => {
+    // Save email as login_hint for future silent sign-ins
+    if (profile.email) localStorage.setItem('gsi_hint', profile.email);
+
     $('user-info').innerHTML = `
       ${profile.picture ? `<img src="${profile.picture}" alt="">` : ''}
       <span>${profile.name || profile.email}</span>
@@ -741,7 +801,7 @@ function onSignedIn() {
   });
 
   members = loadMembers();
-  if (!members || members.length < 4) {
+  if (!members || members.length < 1) {
     showSetupModal();
   } else {
     showDashboard();
@@ -808,9 +868,13 @@ function showDashboard() {
   $('settings-btn').onclick = showSetupModal;
 
   $('sign-out-btn').onclick = () => {
+    if (tokenExpiryTimer) clearTimeout(tokenExpiryTimer);
+    localStorage.removeItem('gsi_hint');
     google.accounts.oauth2.revoke(accessToken, () => {
       accessToken = null;
       $('dashboard').style.display = 'none';
+      $('auth-inner').style.display = 'flex';
+      $('silent-loading').style.display = 'none';
       $('auth-screen').style.display = 'flex';
     });
   };
