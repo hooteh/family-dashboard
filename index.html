@@ -598,17 +598,6 @@
         <div id="date-strip" class="date-strip"></div>
       </div>
 
-      <!-- Schedule lanes -->
-      <div class="card">
-        <div class="card-header">
-          <span class="card-title"><span class="icon">👥</span> Family Schedules — Next 7 Days</span>
-          <span class="card-meta" id="lanes-meta"></span>
-        </div>
-        <div class="lanes-grid" id="lanes-grid">
-          <div class="loading">Loading schedules…</div>
-        </div>
-      </div>
-
       <!-- Upcoming events -->
       <div class="card">
         <div class="card-header">
@@ -617,6 +606,17 @@
         </div>
         <div id="events-list" class="events-list">
           <div class="loading">Fetching calendar…</div>
+        </div>
+      </div>
+
+      <!-- Schedule lanes -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title"><span class="icon">👥</span> Family Schedules</span>
+          <span class="card-meta" id="lanes-meta"></span>
+        </div>
+        <div class="lanes-grid" id="lanes-grid">
+          <div class="loading">Loading schedules…</div>
         </div>
       </div>
 
@@ -664,7 +664,7 @@
 //  CONFIGURATION — replace CLIENT_ID with yours
 // ─────────────────────────────────────────────
 const CONFIG = {
-  CLIENT_ID: '989016016430-9mjfg95r67vn7v0p6segc8e40so33lp1.apps.googleusercontent.com',
+  CLIENT_ID: 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com',
   SCOPES: [
     'https://www.googleapis.com/auth/calendar.readonly',
     'https://www.googleapis.com/auth/tasks'
@@ -1064,17 +1064,20 @@ async function loadCalendars() {
 
     const events = data.items || [];
 
-    // Tag each event with which members it belongs to (by name match in title/description)
+    // Tag events: match member names as prefix/substring in title or description
     allEvents = events.map(ev => {
       const text = ((ev.summary || '') + ' ' + (ev.description || '')).toLowerCase();
+      // Name match: event text contains the member name (case-insensitive substring, e.g. "name%")
       const matched = members.filter(m => text.includes(m.name.toLowerCase()));
-      // If no name matches, treat as "family" event — assign to all
-      const assignedMembers = matched.length ? matched : members;
+      const isNameMatched = matched.length > 0;
+      // Unmatched events are "family" events — shown in upcoming events but not in individual lanes
+      const assignedMembers = isNameMatched ? matched : members;
       return {
         ...ev,
-        _memberName: assignedMembers.map(m => m.name).join(', '),
+        _memberName: isNameMatched ? matched.map(m => m.name).join(', ') : 'Family',
         _memberColor: assignedMembers[0].color,
-        _memberIndices: assignedMembers.map((m, _) => members.indexOf(m))
+        _memberIndices: assignedMembers.map(m => members.indexOf(m)),
+        _isNameMatched: isNameMatched
       };
     }).sort((a, b) => getEventStart(a) - getEventStart(b));
 
@@ -1102,9 +1105,9 @@ function renderLanes() {
   updateDateLabel();
 
   members.forEach((member, idx) => {
-    // Show events that mention this member's name, or untagged family events
+    // Only show events explicitly containing this member's name
     const memberEvents = dateFiltered
-      .filter(ev => ev._memberIndices && ev._memberIndices.includes(idx))
+      .filter(ev => ev._memberIndices && ev._memberIndices.includes(idx) && ev._isNameMatched)
       .slice(0, 8);
 
     const lane = document.createElement('div');
@@ -1121,7 +1124,7 @@ function renderLanes() {
 
     const evContainer = lane.querySelector(`#lane-events-${idx}`);
     if (!memberEvents.length) {
-      evContainer.innerHTML = `<div class="empty">No upcoming events</div>`;
+      evContainer.innerHTML = `<div class="empty">No events containing "${member.name}"</div>`;
       return;
     }
 
@@ -1180,7 +1183,7 @@ function renderEvents() {
           <div class="event-title">${ev.summary || '(No title)'}</div>
           <div class="event-time">${isAllDay ? 'All day' : `${formatTime(ev.start.dateTime)}${ev.end?.dateTime ? ' – ' + formatTime(ev.end.dateTime) : ''}`}</div>
         </div>
-        <div class="event-who" style="background:${ev._memberColor}22;color:${ev._memberColor}">${ev._memberName}</div>
+        <div class="event-who" style="background:${ev._isNameMatched ? ev._memberColor + '22' : 'rgba(255,255,255,0.06)'};color:${ev._isNameMatched ? ev._memberColor : 'var(--muted)'}">${ev._memberName}</div>
       `;
       dg.appendChild(item);
     });
