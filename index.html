@@ -52,6 +52,19 @@
     margin-bottom: 0.4rem;
   }
 
+  #auth-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  #silent-loading {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+  }
+
   #auth-screen p {
     color: var(--muted);
     margin-bottom: 2.5rem;
@@ -441,7 +454,8 @@
     flex-shrink: 0;
   }
   .date-pill.today { background: var(--accent); color: #111; }
-  .date-pill:not(.today):hover { background: #252b3d; }
+  .date-pill.selected { background: var(--accent2); color: #fff; }
+  .date-pill:not(.today):not(.selected):hover { background: #252b3d; }
   .date-pill .dow { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 3px; }
   .date-pill .dom { font-size: 1.1rem; font-weight: 600; }
   .date-pill .dot-row { display: flex; gap: 2px; margin-top: 4px; min-height: 6px; }
@@ -509,10 +523,10 @@
     </button>
   </div>
   <!-- Shown during silent token attempt -->
-  <div id="silent-loading" style="display:none;flex-direction:column;align-items:center;gap:1rem;">
+  <div id="silent-loading">
     <div class="ornament">🏠</div>
     <div style="color:var(--muted);font-size:0.9rem;">Signing you back in…</div>
-    <div style="width:28px;height:28px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite;"></div>
+    <div class="loading" style="padding:0;"></div>
   </div>
 </div>
 
@@ -614,7 +628,7 @@
 //  CONFIGURATION — replace CLIENT_ID with yours
 // ─────────────────────────────────────────────
 const CONFIG = {
-  CLIENT_ID: '989016016430-9mjfg95r67vn7v0p6segc8e40so33lp1.apps.googleusercontent.com',
+  CLIENT_ID: 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com',
   SCOPES: [
     'https://www.googleapis.com/auth/calendar.readonly',
     'https://www.googleapis.com/auth/tasks'
@@ -632,6 +646,7 @@ let members = [];           // [{name, calendarId, color}]
 let allEvents = [];         // flat list from all calendars
 let tasks = [];             // from Google Tasks default list
 let taskListId = null;
+let selectedDate = null;    // Date object — null means "show all"
 
 // ─────────────────────────────────────────────
 //  HELPERS
@@ -697,66 +712,49 @@ function startClock() {
 // ─────────────────────────────────────────────
 let tokenClient;
 let tokenExpiryTimer = null;
+let isSilentAttempt = false;
 
 function initGoogleAuth() {
   tokenClient = google.accounts.oauth2.initTokenClient({
     client_id: CONFIG.CLIENT_ID,
     scope: CONFIG.SCOPES,
-    // Called for both silent and interactive token grants
     callback: (tokenResponse) => {
       if (tokenResponse.error) {
-        // Silent attempt failed — show sign-in button
+        // Silent attempt failed — just show the sign-in button quietly
         showSignInPrompt();
         return;
       }
       accessToken = tokenResponse.access_token;
       scheduleTokenRefresh(tokenResponse.expires_in || 3600);
       onSignedIn();
-    },
-    // Required for silent refresh — suppress the consent UI when hint is set
-    prompt: ''
+    }
   });
 
   $('sign-in-btn').addEventListener('click', () => {
-    // Full interactive flow — show account picker + consent if needed
+    isSilentAttempt = false;
     tokenClient.requestAccessToken({ prompt: 'select_account' });
   });
 
-  // Try a silent token request on page load using the last-used hint
-  attemptSilentSignIn();
-}
-
-function attemptSilentSignIn() {
-  // Show spinner, hide sign-in button while we try
-  $('auth-inner').style.display = 'none';
-  $('silent-loading').style.display = 'flex';
-
+  // Try silent sign-in on page load if we have a previous hint
   const hint = localStorage.getItem('gsi_hint');
-  if (!hint) {
-    // No previous session — go straight to sign-in screen
+  if (hint) {
+    isSilentAttempt = true;
+    $('auth-inner').style.display = 'none';
+    $('silent-loading').style.display = 'flex';
+    // login_hint + prompt:'' asks GSI to skip the account picker if possible
+    tokenClient.requestAccessToken({ prompt: '', login_hint: hint });
+    // Fallback: if no callback within 5s, show sign-in screen
+    tokenExpiryTimer = setTimeout(() => {
+      if (!accessToken) showSignInPrompt();
+    }, 5000);
+  } else {
     showSignInPrompt();
-    return;
   }
-
-  // Ask GSI for a token silently — no UI shown if it works
-  tokenClient.requestAccessToken({ prompt: '', login_hint: hint });
-
-  // If GSI doesn't call back within 4s, fall back to sign-in screen
-  const fallback = setTimeout(showSignInPrompt, 4000);
-
-  // Patch callback to clear fallback timer on success
-  const originalCallback = tokenClient.callback;
-  tokenClient.callback = (resp) => {
-    clearTimeout(fallback);
-    tokenClient.callback = originalCallback; // restore
-    originalCallback(resp);
-  };
 }
 
 function showSignInPrompt() {
   $('silent-loading').style.display = 'none';
   $('auth-inner').style.display = 'flex';
-  $('auth-screen').style.display = 'flex';
 }
 
 // Proactively refresh the token 5 minutes before expiry
@@ -765,7 +763,7 @@ function scheduleTokenRefresh(expiresInSeconds) {
   const refreshIn = Math.max((expiresInSeconds - 300) * 1000, 30000);
   tokenExpiryTimer = setTimeout(() => {
     const hint = localStorage.getItem('gsi_hint');
-    if (hint) {
+    if (hint && accessToken) {
       tokenClient.requestAccessToken({ prompt: '', login_hint: hint });
     }
   }, refreshIn);
@@ -862,6 +860,7 @@ function showDashboard() {
 
   $('refresh-btn').onclick = () => {
     $('refresh-btn').innerHTML = '<span class="spin">↻</span> Refreshing';
+    selectedDate = null;
     loadAllData().then(() => { $('refresh-btn').textContent = '↻ Refresh'; });
   };
 
@@ -894,14 +893,16 @@ function renderDateStrip(eventsForDots = []) {
   const strip = $('date-strip');
   strip.innerHTML = '';
   const today = new Date();
+
   for (let i = 0; i < 14; i++) {
     const d = new Date(today);
     d.setDate(today.getDate() + i);
     const isToday = i === 0;
-    const pill = document.createElement('div');
-    pill.className = 'date-pill' + (isToday ? ' today' : '');
+    const isSelected = selectedDate && isSameDay(d, selectedDate);
 
-    // Find events on this day
+    const pill = document.createElement('div');
+    pill.className = 'date-pill' + (isToday && !isSelected ? ' today' : '') + (isSelected ? ' selected' : '');
+
     const dayEvents = eventsForDots.filter(ev => isSameDay(getEventStart(ev), d));
     const memberColors = [...new Set(dayEvents.map(ev => ev._memberColor))].slice(0, 4);
 
@@ -910,8 +911,40 @@ function renderDateStrip(eventsForDots = []) {
       <span class="dom">${d.getDate()}</span>
       <div class="dot-row">${memberColors.map(c => `<span class="dot" style="background:${c}"></span>`).join('')}</div>
     `;
+
+    pill.addEventListener('click', () => {
+      // Toggle off if already selected
+      if (selectedDate && isSameDay(d, selectedDate)) {
+        selectedDate = null;
+      } else {
+        selectedDate = new Date(d);
+      }
+      renderDateStrip(allEvents);
+      renderLanes();
+      renderEvents();
+      updateDateLabel();
+    });
+
     strip.appendChild(pill);
   }
+}
+
+function updateDateLabel() {
+  const meta = $('lanes-meta');
+  if (selectedDate) {
+    const label = isSameDay(selectedDate, new Date()) ? 'Today' : selectedDate.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short' });
+    const filtered = allEvents.filter(ev => getEventStart(ev) >= startOfDay(selectedDate));
+    meta.textContent = `${filtered.length} event${filtered.length !== 1 ? 's' : ''} from ${label} · click date to clear`;
+  } else {
+    const total = allEvents.length;
+    meta.textContent = `${total} event${total !== 1 ? 's' : ''} across ${members.length} members`;
+  }
+}
+
+function startOfDay(d) {
+  const s = new Date(d);
+  s.setHours(0, 0, 0, 0);
+  return s;
 }
 
 // ─────────────────────────────────────────────
@@ -966,11 +999,14 @@ function renderLanes() {
   const grid = $('lanes-grid');
   grid.innerHTML = '';
 
-  const total = allEvents.length;
-  $('lanes-meta').textContent = `${total} event${total !== 1 ? 's' : ''} across ${members.length} members`;
+  const filteredEvents = selectedDate
+    ? allEvents.filter(ev => getEventStart(ev) >= startOfDay(selectedDate))
+    : allEvents;
+
+  updateDateLabel();
 
   members.forEach((member, idx) => {
-    const memberEvents = allEvents
+    const memberEvents = filteredEvents
       .filter(ev => ev._memberIdx === idx)
       .slice(0, 8);
 
@@ -1013,16 +1049,21 @@ function renderLanes() {
 // ─────────────────────────────────────────────
 function renderEvents() {
   const container = $('events-list');
-  const first30 = allEvents.slice(0, 40);
 
-  if (!first30.length) {
-    container.innerHTML = `<div class="empty">No upcoming events found.<br>Check that calendar IDs are correct in Settings.</div>`;
+  const filteredEvents = selectedDate
+    ? allEvents.filter(ev => getEventStart(ev) >= startOfDay(selectedDate))
+    : allEvents;
+
+  const first40 = filteredEvents.slice(0, 40);
+
+  if (!first40.length) {
+    container.innerHTML = `<div class="empty">${selectedDate ? 'No events from this date onwards.' : 'No upcoming events found.<br>Check that calendar IDs are correct in Settings.'}</div>`;
     return;
   }
 
   // Group by day
   const groups = {};
-  first30.forEach(ev => {
+  first40.forEach(ev => {
     const d = getEventStart(ev);
     const key = d.toDateString();
     if (!groups[key]) groups[key] = { date: d, events: [] };
