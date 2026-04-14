@@ -698,12 +698,15 @@
 //  CONFIGURATION — replace CLIENT_ID with yours
 // ─────────────────────────────────────────────
 const CONFIG = {
-  CLIENT_ID: '989016016430-9mjfg95r67vn7v0p6segc8e40so33lp1.apps.googleusercontent.com',
+  CLIENT_ID: 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com',
   SCOPES: [
     'https://www.googleapis.com/auth/calendar.readonly',
-    'https://www.googleapis.com/auth/tasks'
+    'https://www.googleapis.com/auth/tasks',
+    'https://www.googleapis.com/auth/drive.appdata'
   ].join(' ')
 };
+
+const DRIVE_CONFIG_FILENAME = 'family-dashboard-config.json';
 
 const MEMBER_COLORS = ['var(--m1)', 'var(--m2)', 'var(--m3)', 'var(--m4)'];
 
@@ -722,16 +725,76 @@ let selectedDate = null;    // Date object — null means "show all"
 // ─────────────────────────────────────────────
 const $ = id => document.getElementById(id);
 
-function saveConfig(cal, m) {
-  localStorage.setItem('family_calendar', cal);
-  localStorage.setItem('family_members', JSON.stringify(m));
+// ─────────────────────────────────────────────
+//  DRIVE APPDATA CONFIG
+// ─────────────────────────────────────────────
+let driveConfigFileId = null; // cached file ID once found/created
+
+async function saveConfigToDrive(cal, m) {
+  const payload = JSON.stringify({ calendarId: cal, members: m });
+  const blob = new Blob([payload], { type: 'application/json' });
+
+  if (driveConfigFileId) {
+    // Update existing file
+    await fetch(`https://www.googleapis.com/upload/drive/v3/files/${driveConfigFileId}?uploadType=media`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: payload
+    });
+  } else {
+    // Create new file in appDataFolder
+    const meta = { name: DRIVE_CONFIG_FILENAME, parents: ['appDataFolder'] };
+    const form = new FormData();
+    form.append('metadata', new Blob([JSON.stringify(meta)], { type: 'application/json' }));
+    form.append('file', blob);
+    const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}` },
+      body: form
+    });
+    const created = await res.json();
+    driveConfigFileId = created.id;
+  }
+  // Mirror to localStorage as a fast cache for same-device loads
+  localStorage.setItem('family_config_cache', JSON.stringify({ calendarId: cal, members: m }));
 }
-function loadConfig() {
+
+async function loadConfigFromDrive() {
   try {
-    const cal = localStorage.getItem('family_calendar') || '';
-    const mem = JSON.parse(localStorage.getItem('family_members') || '[]');
-    return { cal, mem };
-  } catch { return { cal: '', mem: [] }; }
+    // 1. Search appDataFolder for our config file
+    const search = await fetch(
+      `https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=name='${DRIVE_CONFIG_FILENAME}'&fields=files(id,name)`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
+    const result = await search.json();
+    if (result.error) throw new Error(result.error.message);
+
+    const files = result.files || [];
+    if (!files.length) return null; // no config saved yet
+
+    driveConfigFileId = files[0].id;
+
+    // 2. Download the file content
+    const download = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${driveConfigFileId}?alt=media`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
+    const cfg = await download.json();
+    // Update local cache
+    localStorage.setItem('family_config_cache', JSON.stringify(cfg));
+    return cfg;
+  } catch(e) {
+    console.error('Drive config load error:', e);
+    return null;
+  }
+}
+
+function loadConfigFromCache() {
+  try {
+    const raw = localStorage.getItem('family_config_cache');
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch { return null; }
 }
 
 function formatTime(dateStr) {
@@ -858,7 +921,8 @@ window.addEventListener('load', () => {
 // ─────────────────────────────────────────────
 //  POST SIGN-IN FLOW
 // ─────────────────────────────────────────────
-function onSignedIn() {
+async function onSignedIn() {
+  // Fetch profile (non-blocking)
   fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
     headers: { Authorization: `Bearer ${accessToken}` }
   }).then(r => r.json()).then(profile => {
@@ -869,14 +933,42 @@ function onSignedIn() {
     `;
   });
 
-  const cfg = loadConfig();
-  calendarId = cfg.cal;
-  members = cfg.mem;
+  // Show a loading state while we check Drive
+  $('auth-screen').style.display = 'none';
+  $('silent-loading').style.display = 'flex';
+  $('silent-loading').querySelector('div:nth-child(2)').textContent = 'Loading your family config…';
 
-  if (!calendarId || !members.length) {
-    showSetupModal();
-  } else {
+  // Try local cache first for instant load, then verify against Drive
+  const cached = loadConfigFromCache();
+  if (cached?.calendarId && cached?.members?.length) {
+    calendarId = cached.calendarId;
+    members = cached.members;
+    $('silent-loading').style.display = 'none';
     showDashboard();
+    // Silently sync Drive config in background to pick up changes from other devices
+    loadConfigFromDrive().then(driveCfg => {
+      if (driveCfg?.calendarId && driveCfg?.members?.length) {
+        const changed = JSON.stringify(driveCfg) !== JSON.stringify({ calendarId, members });
+        if (changed) {
+          calendarId = driveCfg.calendarId;
+          members = driveCfg.members;
+          loadAllData(); // refresh data with updated config
+        }
+      }
+    });
+    return;
+  }
+
+  // No cache — fetch from Drive (first load on new device)
+  const driveCfg = await loadConfigFromDrive();
+  $('silent-loading').style.display = 'none';
+
+  if (driveCfg?.calendarId && driveCfg?.members?.length) {
+    calendarId = driveCfg.calendarId;
+    members = driveCfg.members;
+    showDashboard();
+  } else {
+    showSetupModal();
   }
 }
 
@@ -921,10 +1013,19 @@ function showSetupModal() {
 
     calendarId = newCalId;
     members = newMembers;
-    saveConfig(calendarId, members);
 
-    // Resolve task list IDs from names
+    // Resolve task list IDs from names before saving
     await resolveTaskListIds();
+
+    // Save to Drive (and local cache)
+    try {
+      $('save-setup-btn').textContent = 'Saving…';
+      await saveConfigToDrive(calendarId, members);
+    } catch(e) {
+      console.error('Drive save error:', e);
+      // Fall back to localStorage-only if Drive fails
+      localStorage.setItem('family_config_cache', JSON.stringify({ calendarId, members }));
+    }
 
     $('setup-modal').classList.remove('open');
     showDashboard();
@@ -957,8 +1058,8 @@ async function resolveTaskListIds() {
         member.taskListId = created.id;
       }
     }
-    // Persist resolved IDs
-    saveConfig(calendarId, members);
+    // Persist resolved IDs back to Drive
+    try { await saveConfigToDrive(calendarId, members); } catch(e) { console.warn('Drive save after resolve:', e); }
   } catch(e) { console.error('resolveTaskListIds error', e); }
 }
 
