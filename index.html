@@ -698,7 +698,7 @@
 //  CONFIGURATION — replace CLIENT_ID with yours
 // ─────────────────────────────────────────────
 const CONFIG = {
-  CLIENT_ID: '989016016430-9mjfg95r67vn7v0p6segc8e40so33lp1.apps.googleusercontent.com',
+  CLIENT_ID: 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com',
   SCOPES: [
     'https://www.googleapis.com/auth/calendar.readonly',
     'https://www.googleapis.com/auth/tasks'
@@ -1185,7 +1185,7 @@ function renderEvents() {
     ? allEvents.filter(ev => getEventStart(ev) >= startOfDay(selectedDate))
     : allEvents;
 
-  const first40 = filteredEvents.slice(0, 40);
+  const first40 = filteredEvents.slice(0, 6);
 
   if (!first40.length) {
     container.innerHTML = `<div class="empty">${selectedDate ? 'No events from this date onwards.' : 'No upcoming events found.<br>Check that calendar IDs are correct in Settings.'}</div>`;
