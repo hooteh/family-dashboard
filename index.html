@@ -342,6 +342,7 @@
     border-radius: 12px;
     padding: 1rem;
     min-height: 220px;
+    position: relative;
   }
   .lane-header {
     display: flex;
@@ -384,7 +385,64 @@
     font-size: 0.8rem;
   }
   .lane-event-title { font-weight: 500; line-height: 1.3; }
-  .lane-event-time { color: var(--muted); font-size: 0.72rem; margin-top: 2px; }
+  .lane-event-meta { color: var(--muted); font-size: 0.7rem; margin-top: 2px; display: flex; gap: 6px; }
+  .lane-event-time { }
+  .lane-event-date { }
+
+  /* ── LANE CONFIGURATOR ── */
+  .lane-cfg-btn {
+    background: none; border: none; color: var(--muted);
+    cursor: pointer; font-size: 0.78rem; padding: 2px 4px;
+    border-radius: 4px; transition: color 0.15s, background 0.15s;
+    flex-shrink: 0; line-height: 1;
+  }
+  .lane-cfg-btn:hover { color: var(--text); background: rgba(255,255,255,0.07); }
+
+  .lane-popover {
+    position: absolute; z-index: 50;
+    top: calc(100% + 4px); right: 0;
+    background: var(--surface);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 12px;
+    padding: 0.9rem 1rem;
+    width: 220px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  }
+  .lane-popover h4 {
+    font-family: 'Playfair Display', serif;
+    font-size: 0.85rem; margin-bottom: 0.7rem;
+    color: var(--text);
+  }
+  .cfg-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 4px 0;
+    font-size: 0.78rem; color: var(--muted);
+    border-bottom: 1px solid var(--border);
+  }
+  .cfg-row:last-child { border-bottom: none; padding-bottom: 0; }
+  .cfg-row label { flex: 1; cursor: pointer; }
+  .cfg-toggle {
+    width: 30px; height: 16px; border-radius: 99px;
+    background: var(--surface2); border: 1px solid var(--border);
+    cursor: pointer; position: relative; transition: background 0.2s;
+    flex-shrink: 0; appearance: none; -webkit-appearance: none;
+  }
+  .cfg-toggle::after {
+    content: ''; position: absolute;
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--muted); top: 2px; left: 2px;
+    transition: transform 0.2s, background 0.2s;
+  }
+  .cfg-toggle:checked { background: var(--accent); border-color: var(--accent); }
+  .cfg-toggle:checked::after { transform: translateX(14px); background: #111; }
+  .cfg-number {
+    width: 44px; text-align: center;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 5px; color: var(--text);
+    font-family: 'DM Sans', sans-serif; font-size: 0.78rem;
+    padding: 2px 4px; outline: none;
+  }
+  .cfg-number:focus { border-color: rgba(255,255,255,0.25); }
 
   /* ── TASKS ── */
   .tasks-list { display: flex; flex-direction: column; gap: 6px; }
@@ -577,10 +635,7 @@
   .role-badge.parent { background: rgba(240,192,96,0.15); color: var(--accent); }
   .role-badge.child  { background: rgba(96,168,240,0.15); color: var(--accent2); }
 
-  /* ── CHILD LANE — simplified ── */
-  .lane.child-lane .lane-event-time { display: none; }
-  .lane.child-lane .lane-event { padding: 5px 8px; }
-  .lane.child-lane .lane-event-title { font-size: 0.78rem; }
+  /* child-lane — handled per-prefs now */
 
   /* ── MEMBER SETUP ROWS ── */
   .member-setup-row {
@@ -786,7 +841,7 @@
 //  CONFIGURATION — replace CLIENT_ID with yours
 // ─────────────────────────────────────────────
 const CONFIG = {
-  CLIENT_ID: '989016016430-9mjfg95r67vn7v0p6segc8e40so33lp1.apps.googleusercontent.com',
+  CLIENT_ID: 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com',
   SCOPES: [
     'https://www.googleapis.com/auth/calendar.readonly',
     'https://www.googleapis.com/auth/tasks',
@@ -807,6 +862,7 @@ let members = [];           // [{name, taskListId, taskListName, color}]
 let allEvents = [];         // flat from shared calendar
 let memberTasks = {};       // { memberIdx: [tasks] }
 let selectedDate = null;    // Date object — null means "show all"
+let lanePrefs = {};         // { memberIdx: { showTime, showDate, namedOnly, maxEvents, showBadge } }
 
 // ─────────────────────────────────────────────
 //  HELPERS
@@ -818,8 +874,8 @@ const $ = id => document.getElementById(id);
 // ─────────────────────────────────────────────
 let driveConfigFileId = null; // cached file ID once found/created
 
-async function saveConfigToDrive(cal, m) {
-  const payload = JSON.stringify({ calendarId: cal, members: m });
+async function saveConfigToDrive(cal, m, lp) {
+  const payload = JSON.stringify({ calendarId: cal, members: m, lanePrefs: lp || lanePrefs });
   const blob = new Blob([payload], { type: 'application/json' });
 
   if (driveConfigFileId) {
@@ -869,6 +925,7 @@ async function loadConfigFromDrive() {
     );
     const cfg = await download.json();
     // Update local cache
+    if (cfg.lanePrefs) lanePrefs = cfg.lanePrefs;
     localStorage.setItem('family_config_cache', JSON.stringify(cfg));
     return cfg;
   } catch(e) {
@@ -883,6 +940,24 @@ function loadConfigFromCache() {
     if (!raw) return null;
     return JSON.parse(raw);
   } catch { return null; }
+}
+
+// ─────────────────────────────────────────────
+//  LANE PREFERENCES
+// ─────────────────────────────────────────────
+function defaultPrefs(member) {
+  const isChild = (member || {}).role === 'child';
+  return { showTime: !isChild, showDate: true, namedOnly: isChild, maxEvents: 8, showBadge: true };
+}
+function getLanePrefs(idx) {
+  return Object.assign({}, defaultPrefs(members[idx] || {}), lanePrefs[idx] || {});
+}
+async function saveLanePrefs() {
+  try { await saveConfigToDrive(calendarId, members, lanePrefs); }
+  catch(e) { localStorage.setItem('family_config_cache', JSON.stringify({ calendarId, members, lanePrefs })); }
+}
+function shortDate(d) {
+  return `${d.getDate()}/${d.getMonth()+1}`;
 }
 
 function formatTime(dateStr) {
@@ -1031,6 +1106,7 @@ async function onSignedIn() {
   if (cached?.calendarId && cached?.members?.length) {
     calendarId = cached.calendarId;
     members = cached.members;
+    if (cached.lanePrefs) lanePrefs = cached.lanePrefs;
     $('silent-loading').style.display = 'none';
     showDashboard();
     // Silently sync Drive config in background to pick up changes from other devices
@@ -1040,6 +1116,7 @@ async function onSignedIn() {
         if (changed) {
           calendarId = driveCfg.calendarId;
           members = driveCfg.members;
+          if (driveCfg.lanePrefs) lanePrefs = driveCfg.lanePrefs;
           loadAllData(); // refresh data with updated config
         }
       }
@@ -1395,6 +1472,8 @@ async function loadCalendars() {
 // ─────────────────────────────────────────────
 function renderLanes() {
   const grid = $('lanes-grid');
+  // Close any open popovers first
+  document.querySelectorAll('.lane-popover').forEach(p => p.remove());
   grid.innerHTML = '';
 
   const dateFiltered = selectedDate
@@ -1404,44 +1483,123 @@ function renderLanes() {
   updateDateLabel();
 
   members.forEach((member, idx) => {
-    // Only show events explicitly containing this member's name
-    const memberEvents = dateFiltered
-      .filter(ev => ev._memberIndices && ev._memberIndices.includes(idx) && ev._isNameMatched)
-      .slice(0, 8);
-
+    const prefs = getLanePrefs(idx);
     const isChild = member.role === 'child';
+
+    // Filter events per prefs: namedOnly = only name-matched; else all events
+    const memberEvents = dateFiltered
+      .filter(ev => {
+        if (!ev._memberIndices || !ev._memberIndices.includes(idx)) return false;
+        if (prefs.namedOnly) return ev._isNameMatched;
+        return true;
+      })
+      .slice(0, prefs.maxEvents);
+
     const lane = document.createElement('div');
-    lane.className = 'lane' + (isChild ? ' child-lane' : '');
+    lane.className = 'lane';
     lane.innerHTML = `
       <div class="lane-header">
         <div class="lane-avatar">${initials(member.name)}</div>
         <div class="lane-name">
           ${member.name}
-          <span class="role-badge ${isChild ? 'child' : 'parent'}">${isChild ? 'child' : 'parent'}</span>
+          ${prefs.showBadge ? `<span class="role-badge ${isChild ? 'child' : 'parent'}">${isChild ? 'child' : 'parent'}</span>` : ''}
         </div>
         <div class="lane-count">${memberEvents.length}</div>
+        <button class="lane-cfg-btn" data-idx="${idx}" title="Configure lane">⚙</button>
       </div>
       <div class="lane-events" id="lane-events-${idx}"></div>
     `;
     grid.appendChild(lane);
 
+    // Gear button → popover
+    lane.querySelector('.lane-cfg-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      openLanePopover(lane, idx);
+    });
+
     const evContainer = lane.querySelector(`#lane-events-${idx}`);
     if (!memberEvents.length) {
-      evContainer.innerHTML = `<div class="empty">No events containing "${member.name}"</div>`;
+      const label = prefs.namedOnly ? `No events containing "${member.name}"` : 'No upcoming events';
+      evContainer.innerHTML = `<div class="empty">${label}</div>`;
       return;
     }
 
     memberEvents.forEach(ev => {
+      const start = getEventStart(ev);
       const isAllDay = !ev.start.dateTime;
       const div = document.createElement('div');
       div.className = 'lane-event';
+
+      const metaParts = [];
+      if (prefs.showDate) metaParts.push(`<span class="lane-event-date">${shortDate(start)}</span>`);
+      if (prefs.showTime && !isAllDay) metaParts.push(`<span class="lane-event-time">${formatTime(ev.start.dateTime)}</span>`);
+      else if (prefs.showTime && isAllDay) metaParts.push(`<span class="lane-event-time">All day</span>`);
+
       div.innerHTML = `
         <div class="lane-event-title">${ev.summary || '(No title)'}</div>
-        <div class="lane-event-time">${isAllDay ? 'All day · ' : formatTime(ev.start.dateTime) + ' · '}${formatDate(isAllDay ? ev.start.date : ev.start.dateTime)}</div>
+        ${metaParts.length ? `<div class="lane-event-meta">${metaParts.join('<span style="opacity:0.3">·</span>')}</div>` : ''}
       `;
       evContainer.appendChild(div);
     });
   });
+}
+
+function openLanePopover(lane, idx) {
+  // Close any existing popovers
+  document.querySelectorAll('.lane-popover').forEach(p => p.remove());
+
+  const prefs = getLanePrefs(idx);
+  const pop = document.createElement('div');
+  pop.className = 'lane-popover';
+  pop.innerHTML = `
+    <h4>Lane settings</h4>
+    <div class="cfg-row">
+      <label for="cfg-time-${idx}">Show time</label>
+      <input type="checkbox" class="cfg-toggle" id="cfg-time-${idx}" ${prefs.showTime ? 'checked' : ''}>
+    </div>
+    <div class="cfg-row">
+      <label for="cfg-date-${idx}">Show date</label>
+      <input type="checkbox" class="cfg-toggle" id="cfg-date-${idx}" ${prefs.showDate ? 'checked' : ''}>
+    </div>
+    <div class="cfg-row">
+      <label for="cfg-named-${idx}">Named events only</label>
+      <input type="checkbox" class="cfg-toggle" id="cfg-named-${idx}" ${prefs.namedOnly ? 'checked' : ''}>
+    </div>
+    <div class="cfg-row">
+      <label for="cfg-max-${idx}">Max events</label>
+      <input type="number" class="cfg-number" id="cfg-max-${idx}" value="${prefs.maxEvents}" min="1" max="20">
+    </div>
+    <div class="cfg-row">
+      <label for="cfg-badge-${idx}">Show role badge</label>
+      <input type="checkbox" class="cfg-toggle" id="cfg-badge-${idx}" ${prefs.showBadge ? 'checked' : ''}>
+    </div>
+  `;
+  lane.appendChild(pop);
+
+  // Live-save on any change
+  pop.querySelectorAll('input').forEach(input => {
+    input.addEventListener('change', () => {
+      lanePrefs[idx] = {
+        showTime:  pop.querySelector(`#cfg-time-${idx}`).checked,
+        showDate:  pop.querySelector(`#cfg-date-${idx}`).checked,
+        namedOnly: pop.querySelector(`#cfg-named-${idx}`).checked,
+        maxEvents: parseInt(pop.querySelector(`#cfg-max-${idx}`).value) || 8,
+        showBadge: pop.querySelector(`#cfg-badge-${idx}`).checked,
+      };
+      saveLanePrefs();
+      renderLanes();
+    });
+  });
+
+  // Close on outside click
+  setTimeout(() => {
+    document.addEventListener('click', function handler(e) {
+      if (!pop.contains(e.target)) {
+        pop.remove();
+        document.removeEventListener('click', handler);
+      }
+    });
+  }, 0);
 }
 
 // ─────────────────────────────────────────────
