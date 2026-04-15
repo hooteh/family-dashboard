@@ -23,6 +23,8 @@
     --m2: #60a8f0;
     --m3: #60d4a0;
     --m4: #f07090;
+    --m5: #a78bfa;
+    --m6: #34d399;
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -331,7 +333,7 @@
   /* ── SCHEDULE LANES ── */
   .lanes-grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
     gap: 1rem;
   }
 
@@ -363,11 +365,15 @@
   .lane:nth-child(2) .lane-header { border-color: var(--m2); }
   .lane:nth-child(3) .lane-header { border-color: var(--m3); }
   .lane:nth-child(4) .lane-header { border-color: var(--m4); }
+  .lane:nth-child(5) .lane-header { border-color: var(--m5); }
+  .lane:nth-child(6) .lane-header { border-color: var(--m6); }
 
   .lane:nth-child(1) .lane-avatar { background: rgba(240,192,96,0.15); color: var(--m1); }
   .lane:nth-child(2) .lane-avatar { background: rgba(96,168,240,0.15); color: var(--m2); }
   .lane:nth-child(3) .lane-avatar { background: rgba(96,212,160,0.15); color: var(--m3); }
   .lane:nth-child(4) .lane-avatar { background: rgba(240,112,144,0.15); color: var(--m4); }
+  .lane:nth-child(5) .lane-avatar { background: rgba(167,139,250,0.15); color: var(--m5); }
+  .lane:nth-child(6) .lane-avatar { background: rgba(52,211,153,0.15); color: var(--m6); }
 
   .lane-events { display: flex; flex-direction: column; gap: 6px; }
 
@@ -540,6 +546,8 @@
   .task-lane:nth-child(2) .task-lane-header { border-color: var(--m2); color: var(--m2); }
   .task-lane:nth-child(3) .task-lane-header { border-color: var(--m3); color: var(--m3); }
   .task-lane:nth-child(4) .task-lane-header { border-color: var(--m4); color: var(--m4); }
+  .task-lane:nth-child(5) .task-lane-header { border-color: var(--m5); color: var(--m5); }
+  .task-lane:nth-child(6) .task-lane-header { border-color: var(--m6); color: var(--m6); }
   .task-lane-count { margin-left: auto; color: var(--muted); font-size: 0.72rem; }
   .task-lane-items { display: flex; flex-direction: column; gap: 4px; }
 
@@ -554,6 +562,81 @@
     outline: none;
     flex-shrink: 0;
   }
+
+  /* ── ROLE BADGES ── */
+  .role-badge {
+    font-size: 0.6rem;
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    margin-left: 4px;
+    vertical-align: middle;
+  }
+  .role-badge.parent { background: rgba(240,192,96,0.15); color: var(--accent); }
+  .role-badge.child  { background: rgba(96,168,240,0.15); color: var(--accent2); }
+
+  /* ── CHILD LANE — simplified ── */
+  .lane.child-lane .lane-event-time { display: none; }
+  .lane.child-lane .lane-event { padding: 5px 8px; }
+  .lane.child-lane .lane-event-title { font-size: 0.78rem; }
+
+  /* ── MEMBER SETUP ROWS ── */
+  .member-setup-row {
+    background: var(--surface2);
+    border-radius: 12px;
+    padding: 1rem;
+    border-left: 3px solid var(--border);
+    position: relative;
+  }
+  .member-setup-row .row-header {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 0.8rem;
+  }
+  .member-setup-row .row-num {
+    width: 22px; height: 22px; border-radius: 50%;
+    background: rgba(255,255,255,0.07);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.72rem; font-weight: 600; flex-shrink: 0;
+  }
+  .member-setup-row .row-title { font-size: 0.85rem; font-weight: 500; flex: 1; }
+  .remove-member-btn {
+    background: none; border: none; color: var(--muted);
+    cursor: pointer; font-size: 1rem; padding: 0 4px;
+    transition: color 0.15s;
+  }
+  .remove-member-btn:hover { color: var(--red); }
+  .role-toggle {
+    display: flex; gap: 6px; margin-bottom: 0.8rem;
+  }
+  .role-btn {
+    flex: 1; padding: 6px; border-radius: 7px;
+    border: 1px solid var(--border);
+    background: transparent; color: var(--muted);
+    font-family: 'DM Sans', sans-serif; font-size: 0.78rem;
+    cursor: pointer; transition: all 0.15s; text-align: center;
+  }
+  .role-btn.active-parent { background: rgba(240,192,96,0.12); border-color: var(--accent); color: var(--accent); }
+  .role-btn.active-child  { background: rgba(96,168,240,0.12); border-color: var(--accent2); color: var(--accent2); }
+  .setup-field { margin-bottom: 0.7rem; }
+  .setup-field:last-child { margin-bottom: 0; }
+  .setup-field label { display: block; font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
+  .setup-field input, .setup-field select {
+    width: 100%; background: transparent;
+    border: none; border-bottom: 1px solid var(--border);
+    color: var(--text); font-family: 'DM Sans', sans-serif;
+    font-size: 0.9rem; padding: 4px 0 6px; outline: none;
+  }
+  .setup-field input:focus, .setup-field select:focus { border-color: rgba(255,255,255,0.3); }
+  .setup-field select option { background: var(--surface2); }
+  .add-member-btn {
+    width: 100%; background: transparent;
+    border: 1px dashed var(--border); border-radius: 10px;
+    color: var(--muted); padding: 10px;
+    font-family: 'DM Sans', sans-serif; font-size: 0.85rem;
+    cursor: pointer; transition: all 0.15s; margin-top: 0.5rem;
+  }
+  .add-member-btn:hover { border-color: rgba(255,255,255,0.2); color: var(--text); }
 
   /* ── REFRESH SPINNER ── */
   .spin { animation: spin 1s linear infinite; display: inline-block; }
@@ -597,15 +680,20 @@
 <div id="setup-modal">
   <div class="modal-box">
     <h2>Set up your family</h2>
-    <p class="subtitle">Enter the shared family calendar ID, then each member's name and their Google Tasks list name. The Tasks list name must match exactly what's in Google Tasks (e.g. "Mum's Tasks"). New lists are created automatically if the name doesn't match an existing one.</p>
+    <p class="subtitle">Add up to 6 family members with their role, then configure calendar and tasks for each.</p>
+
     <div style="margin-bottom:1.4rem;">
-      <div class="member-row" style="border-color:var(--accent2);">
-        <label>Shared Family Calendar ID</label>
-        <input type="text" id="cal-id-input" placeholder="e.g. family@group.calendar.google.com or email@gmail.com">
+      <div class="member-setup-row" style="border-color:var(--accent2);">
+        <div class="setup-field">
+          <label>Shared Family Calendar ID</label>
+          <input type="text" id="cal-id-input" placeholder="e.g. family@group.calendar.google.com">
+        </div>
       </div>
     </div>
-    <div class="member-setup" id="member-setup"></div>
-    <button class="btn-primary" id="save-setup-btn">Save & Open Dashboard →</button>
+
+    <div id="member-setup"></div>
+    <button class="add-member-btn" id="add-member-btn">+ Add family member</button>
+    <button class="btn-primary" id="save-setup-btn" style="margin-top:1rem;">Save & Open Dashboard →</button>
   </div>
 </div>
 
@@ -698,7 +786,7 @@
 //  CONFIGURATION — replace CLIENT_ID with yours
 // ─────────────────────────────────────────────
 const CONFIG = {
-  CLIENT_ID: '989016016430-9mjfg95r67vn7v0p6segc8e40so33lp1.apps.googleusercontent.com',
+  CLIENT_ID: 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com',
   SCOPES: [
     'https://www.googleapis.com/auth/calendar.readonly',
     'https://www.googleapis.com/auth/tasks',
@@ -708,7 +796,7 @@ const CONFIG = {
 
 const DRIVE_CONFIG_FILENAME = 'family-dashboard-config.json';
 
-const MEMBER_COLORS = ['var(--m1)', 'var(--m2)', 'var(--m3)', 'var(--m4)'];
+const MEMBER_COLORS = ['var(--m1)', 'var(--m2)', 'var(--m3)', 'var(--m4)', 'var(--m5)', 'var(--m6)'];
 
 // ─────────────────────────────────────────────
 //  STATE
@@ -979,51 +1067,34 @@ function showSetupModal() {
   $('auth-screen').style.display = 'none';
   $('setup-modal').classList.add('open');
 
-  // Pre-fill calendar ID
   $('cal-id-input').value = calendarId || '';
 
-  const container = $('member-setup');
-  container.innerHTML = '';
-  for (let i = 0; i < 4; i++) {
-    const m = members[i] || {};
-    const div = document.createElement('div');
-    div.className = 'member-row';
-    div.innerHTML = `
-      <label>Member ${i + 1} — Name</label>
-      <input type="text" id="m-name-${i}" placeholder="e.g. Mum" value="${m.name || ''}">
-      <label>Google Tasks List Name <span style="color:var(--muted);font-size:0.7rem">(must match exactly, e.g. "Mum's Tasks")</span></label>
-      <input type="text" id="m-tasklist-${i}" placeholder="e.g. Mum's Tasks" value="${m.taskListName || ''}">
-    `;
-    container.appendChild(div);
-  }
+  // Render member rows from current members state
+  renderSetupRows(members.length ? members : [{ name: '', role: 'parent', taskListType: 'named', taskListName: '', taskListId: null, color: MEMBER_COLORS[0] }]);
+
+  $('add-member-btn').onclick = () => {
+    const current = collectSetupRows();
+    if (current.length >= 6) return;
+    current.push({ name: '', role: 'child', taskListType: 'named', taskListName: '', taskListId: null, color: MEMBER_COLORS[current.length] });
+    renderSetupRows(current);
+  };
 
   $('save-setup-btn').onclick = async () => {
     const newCalId = $('cal-id-input').value.trim();
     if (!newCalId) { alert('Please enter the shared family Calendar ID.'); return; }
-
-    const newMembers = [];
-    for (let i = 0; i < 4; i++) {
-      const name = $(`m-name-${i}`).value.trim();
-      const taskListName = $(`m-tasklist-${i}`).value.trim();
-      if (name) {
-        newMembers.push({ name, taskListName, taskListId: null, color: MEMBER_COLORS[i] });
-      }
-    }
-    if (!newMembers.length) { alert('Please enter at least one family member.'); return; }
+    const newMembers = collectSetupRows().filter(m => m.name);
+    if (!newMembers.length) { alert('Please add at least one family member.'); return; }
 
     calendarId = newCalId;
     members = newMembers;
 
-    // Resolve task list IDs from names before saving
     await resolveTaskListIds();
 
-    // Save to Drive (and local cache)
     try {
       $('save-setup-btn').textContent = 'Saving…';
       await saveConfigToDrive(calendarId, members);
     } catch(e) {
       console.error('Drive save error:', e);
-      // Fall back to localStorage-only if Drive fails
       localStorage.setItem('family_config_cache', JSON.stringify({ calendarId, members }));
     }
 
@@ -1032,7 +1103,91 @@ function showSetupModal() {
   };
 }
 
+function renderSetupRows(memberList) {
+  const container = $('member-setup');
+  container.innerHTML = '';
+  memberList.forEach((m, i) => {
+    const row = document.createElement('div');
+    row.className = 'member-setup-row';
+    row.style.borderColor = MEMBER_COLORS[i].replace('var(', '').replace(')', '');
+    row.style.marginBottom = '0.8rem';
+    row.dataset.idx = i;
+    row.innerHTML = `
+      <div class="row-header">
+        <div class="row-num" style="background:${MEMBER_COLORS[i]}22;color:${MEMBER_COLORS[i]}">${i+1}</div>
+        <div class="row-title">Family Member ${i+1}</div>
+        ${memberList.length > 1 ? `<button class="remove-member-btn" data-remove="${i}" title="Remove">✕</button>` : ''}
+      </div>
+      <div class="role-toggle">
+        <button class="role-btn ${m.role === 'parent' ? 'active-parent' : ''}" data-role="parent" data-idx="${i}">👤 Parent</button>
+        <button class="role-btn ${m.role === 'child' ? 'active-child' : ''}" data-role="child" data-idx="${i}">🧒 Child</button>
+      </div>
+      <div class="setup-field">
+        <label>Name</label>
+        <input type="text" id="m-name-${i}" placeholder="e.g. Mum" value="${m.name || ''}">
+      </div>
+      <div class="setup-field">
+        <label>Tasks list</label>
+        <select id="m-tasktype-${i}">
+          <option value="named" ${m.taskListType === 'named' ? 'selected' : ''}>Named list on this account</option>
+          <option value="default" ${m.taskListType === 'default' ? 'selected' : ''}>Their own Google account (My Tasks)</option>
+        </select>
+      </div>
+      <div class="setup-field" id="m-taskname-wrap-${i}" style="${m.taskListType === 'default' ? 'display:none' : ''}">
+        <label>Task list name</label>
+        <input type="text" id="m-tasklist-${i}" placeholder='e.g. Mum Tasks' value="${m.taskListName || ''}">
+      </div>
+    `;
+    container.appendChild(row);
+
+    // Toggle task name field visibility
+    row.querySelector(`#m-tasktype-${i}`).addEventListener('change', e => {
+      row.querySelector(`#m-taskname-wrap-${i}`).style.display = e.target.value === 'default' ? 'none' : '';
+    });
+
+    // Role toggle buttons
+    row.querySelectorAll('.role-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        row.querySelectorAll('.role-btn').forEach(b => b.className = 'role-btn');
+        const role = btn.dataset.role;
+        btn.classList.add(role === 'parent' ? 'active-parent' : 'active-child');
+      });
+    });
+
+    // Remove button
+    const removeBtn = row.querySelector('[data-remove]');
+    if (removeBtn) {
+      removeBtn.addEventListener('click', () => {
+        const current = collectSetupRows();
+        current.splice(i, 1);
+        // Re-assign colors
+        current.forEach((m2, j) => { m2.color = MEMBER_COLORS[j]; });
+        renderSetupRows(current);
+      });
+    }
+  });
+}
+
+function collectSetupRows() {
+  const rows = $('member-setup').querySelectorAll('.member-setup-row');
+  const result = [];
+  rows.forEach((row, i) => {
+    const role = row.querySelector('.role-btn.active-parent') ? 'parent' : 'child';
+    const taskListType = row.querySelector(`#m-tasktype-${i}`)?.value || 'named';
+    result.push({
+      name: (row.querySelector(`#m-name-${i}`)?.value || '').trim(),
+      role,
+      taskListType,
+      taskListName: (row.querySelector(`#m-tasklist-${i}`)?.value || '').trim(),
+      taskListId: null,
+      color: MEMBER_COLORS[i]
+    });
+  });
+  return result;
+}
+
 // Match task list names to real Google Tasks list IDs (or create if missing)
+// Members with taskListType='default' use the Google Tasks default list — marked with taskListId='__default__'
 async function resolveTaskListIds() {
   try {
     const res = await fetch('https://tasks.googleapis.com/tasks/v1/users/@me/lists?maxResults=20', {
@@ -1041,24 +1196,31 @@ async function resolveTaskListIds() {
     const data = await res.json();
     if (data.error) return;
     const lists = data.items || [];
+    // The first list is typically "My Tasks" (the default)
+    const defaultListId = lists[0]?.id || null;
 
     for (const member of members) {
-      if (!member.taskListName) continue;
-      const match = lists.find(l => l.title.toLowerCase() === member.taskListName.toLowerCase());
-      if (match) {
-        member.taskListId = match.id;
+      if (member.taskListType === 'default') {
+        // Use the signed-in user's default task list
+        // Note: since this is a shared dashboard, all 'default' members share the same account's default list
+        member.taskListId = defaultListId;
+        member.taskListName = lists[0]?.title || 'My Tasks';
       } else {
-        // Create the list
-        const cr = await fetch('https://tasks.googleapis.com/tasks/v1/users/@me/lists', {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title: member.taskListName })
-        });
-        const created = await cr.json();
-        member.taskListId = created.id;
+        if (!member.taskListName) continue;
+        const match = lists.find(l => l.title.toLowerCase() === member.taskListName.toLowerCase());
+        if (match) {
+          member.taskListId = match.id;
+        } else {
+          const cr = await fetch('https://tasks.googleapis.com/tasks/v1/users/@me/lists', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title: member.taskListName })
+          });
+          const created = await cr.json();
+          member.taskListId = created.id;
+        }
       }
     }
-    // Persist resolved IDs back to Drive
     try { await saveConfigToDrive(calendarId, members); } catch(e) { console.warn('Drive save after resolve:', e); }
   } catch(e) { console.error('resolveTaskListIds error', e); }
 }
@@ -1097,8 +1259,10 @@ function showDashboard() {
   };
 
   // Populate member selector
+  // Parents can add tasks for anyone; children shouldn't be in the dropdown at all
+  // (since this dashboard is operated by a parent/guardian)
   const sel = $('task-member-select');
-  sel.innerHTML = members.map((m, i) => `<option value="${i}">${m.name}</option>`).join('');
+  sel.innerHTML = members.map((m, i) => `<option value="${i}">${m.name}${m.role === 'child' ? ' 🧒' : ''}</option>`).join('');
 
   $('add-task-btn').onclick = addTask;
   $('new-task-input').addEventListener('keydown', e => { if (e.key === 'Enter') addTask(); });
@@ -1245,12 +1409,16 @@ function renderLanes() {
       .filter(ev => ev._memberIndices && ev._memberIndices.includes(idx) && ev._isNameMatched)
       .slice(0, 8);
 
+    const isChild = member.role === 'child';
     const lane = document.createElement('div');
-    lane.className = 'lane';
+    lane.className = 'lane' + (isChild ? ' child-lane' : '');
     lane.innerHTML = `
       <div class="lane-header">
         <div class="lane-avatar">${initials(member.name)}</div>
-        <div class="lane-name">${member.name}</div>
+        <div class="lane-name">
+          ${member.name}
+          <span class="role-badge ${isChild ? 'child' : 'parent'}">${isChild ? 'child' : 'parent'}</span>
+        </div>
         <div class="lane-count">${memberEvents.length}</div>
       </div>
       <div class="lane-events" id="lane-events-${idx}"></div>
@@ -1407,7 +1575,7 @@ function renderTaskLanes() {
     lane.className = 'task-lane';
     lane.innerHTML = `
       <div class="task-lane-header">
-        <span>${member.name}</span>
+        <span>${member.name} <span class="role-badge ${member.role === 'child' ? 'child' : 'parent'}">${member.role || 'parent'}</span></span>
         <span class="task-lane-count">${open} open</span>
       </div>
       <div class="task-lane-items" id="task-lane-items-${idx}"></div>
