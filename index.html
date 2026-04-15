@@ -334,8 +334,11 @@
   .lanes-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    grid-auto-rows: 1fr;
     gap: 1rem;
+    align-items: stretch;
   }
+  .lane { height: 100%; }
 
   .lane {
     background: var(--surface2);
@@ -399,14 +402,17 @@
   .lane-cfg-btn:hover { color: var(--text); background: rgba(255,255,255,0.07); }
 
   .lane-popover {
-    position: absolute; z-index: 50;
-    top: calc(100% + 4px); right: 0;
+    position: fixed; z-index: 200;
     background: var(--surface);
     border: 1px solid rgba(255,255,255,0.12);
     border-radius: 12px;
     padding: 0.9rem 1rem;
     width: 220px;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+  }
+  .lane-cfg-btn.active {
+    color: var(--accent);
+    background: rgba(240,192,96,0.12);
   }
   .lane-popover h4 {
     font-family: 'Playfair Display', serif;
@@ -696,17 +702,85 @@
   /* ── REFRESH SPINNER ── */
   .spin { animation: spin 1s linear infinite; display: inline-block; }
 
+  /* ── HAMBURGER MENU ── */
+  #hamburger {
+    display: none;
+    background: none; border: none;
+    color: var(--text); font-size: 1.4rem;
+    cursor: pointer; padding: 4px 8px; line-height: 1;
+  }
+  #mobile-menu {
+    display: none;
+    flex-direction: column;
+    gap: 0;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0.5rem 1rem 1rem;
+  }
+  #mobile-menu.open { display: flex; }
+  #mobile-menu .btn-sm {
+    justify-content: flex-start;
+    border: none; border-radius: 8px;
+    padding: 10px 12px; font-size: 0.9rem;
+    width: 100%; text-align: left;
+  }
+  #mobile-menu #user-info-mobile {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 12px; font-size: 0.85rem; color: var(--muted);
+  }
+  #mobile-menu #user-info-mobile img { width: 24px; height: 24px; border-radius: 50%; }
+
+  /* ── SWIPEABLE LANES (mobile) ── */
+  .lanes-swipe-wrap {
+    display: none;
+    overflow: hidden;
+    position: relative;
+  }
+  .lanes-swipe-track {
+    display: flex;
+    transition: transform 0.3s cubic-bezier(0.4,0,0.2,1);
+  }
+  .lanes-swipe-track .lane {
+    flex: 0 0 100%;
+    min-height: 260px;
+    height: auto;
+  }
+  .swipe-nav {
+    display: flex; align-items: center; justify-content: center;
+    gap: 1rem; margin-top: 0.8rem;
+  }
+  .swipe-btn {
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text); border-radius: 8px;
+    padding: 6px 14px; font-size: 0.85rem;
+    cursor: pointer; transition: background 0.15s;
+  }
+  .swipe-btn:hover { background: #252b3d; }
+  .swipe-btn:disabled { opacity: 0.3; cursor: default; }
+  .swipe-dots { display: flex; gap: 5px; align-items: center; }
+  .swipe-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--border); transition: background 0.2s, transform 0.2s;
+  }
+  .swipe-dot.active { background: var(--accent); transform: scale(1.4); }
+
   /* ── RESPONSIVE ── */
   @media (max-width: 1100px) {
     .main-grid { grid-template-columns: 1fr; }
   }
   @media (max-width: 780px) {
     .lanes-grid { grid-template-columns: repeat(2, 1fr); }
-    header { padding: 1rem; }
+    header { padding: 0.9rem 1rem; }
     .main-grid { padding: 1rem; }
+    .header-right { display: none; }
+    #hamburger { display: block; }
   }
   @media (max-width: 480px) {
-    .lanes-grid { grid-template-columns: 1fr; }
+    .lanes-grid { display: none; }
+    .lanes-swipe-wrap { display: block; }
+    .main-grid { padding: 0.75rem; gap: 0.75rem; }
+    .card { padding: 1rem; }
+    .header-left h1 { font-size: 1.1rem; }
   }
 </style>
 </head>
@@ -765,7 +839,15 @@
       <div id="user-info"></div>
       <button class="btn-sm" id="sign-out-btn">Sign out</button>
     </div>
+    <button id="hamburger" aria-label="Menu">☰</button>
   </header>
+  <!-- Mobile nav menu -->
+  <div id="mobile-menu">
+    <div id="user-info-mobile"></div>
+    <button class="btn-sm" id="refresh-btn-m">↻ Refresh</button>
+    <button class="btn-sm" id="settings-btn-m">⚙ Settings</button>
+    <button class="btn-sm" id="sign-out-btn-m">Sign out</button>
+  </div>
 
   <div class="main-grid">
     <div class="left-col">
@@ -792,8 +874,18 @@
           <span class="card-title"><span class="icon">👥</span> Family Schedules</span>
           <span class="card-meta" id="lanes-meta"></span>
         </div>
+        <!-- Desktop grid -->
         <div class="lanes-grid" id="lanes-grid">
           <div class="loading">Loading schedules…</div>
+        </div>
+        <!-- Mobile swipeable -->
+        <div class="lanes-swipe-wrap" id="lanes-swipe-wrap">
+          <div class="lanes-swipe-track" id="lanes-swipe-track"></div>
+          <div class="swipe-nav">
+            <button class="swipe-btn" id="swipe-prev">←</button>
+            <div class="swipe-dots" id="swipe-dots"></div>
+            <button class="swipe-btn" id="swipe-next">→</button>
+          </div>
         </div>
       </div>
 
@@ -841,7 +933,7 @@
 //  CONFIGURATION — replace CLIENT_ID with yours
 // ─────────────────────────────────────────────
 const CONFIG = {
-  CLIENT_ID: '989016016430-9mjfg95r67vn7v0p6segc8e40so33lp1.apps.googleusercontent.com',
+  CLIENT_ID: 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com',
   SCOPES: [
     'https://www.googleapis.com/auth/calendar.readonly',
     'https://www.googleapis.com/auth/tasks',
@@ -1090,10 +1182,10 @@ async function onSignedIn() {
     headers: { Authorization: `Bearer ${accessToken}` }
   }).then(r => r.json()).then(profile => {
     if (profile.email) localStorage.setItem('gsi_hint', profile.email);
-    $('user-info').innerHTML = `
-      ${profile.picture ? `<img src="${profile.picture}" alt="">` : ''}
-      <span>${profile.name || profile.email}</span>
-    `;
+    const uHtml = `${profile.picture ? `<img src="${profile.picture}" alt="">` : ''}<span>${profile.name || profile.email}</span>`;
+    $('user-info').innerHTML = uHtml;
+    const mob = $('user-info-mobile');
+    if (mob) mob.innerHTML = uHtml;
   });
 
   // Show a loading state while we check Drive
@@ -1343,6 +1435,28 @@ function showDashboard() {
 
   $('add-task-btn').onclick = addTask;
   $('new-task-input').addEventListener('keydown', e => { if (e.key === 'Enter') addTask(); });
+
+  // ── Hamburger menu ──
+  $('hamburger').addEventListener('click', () => {
+    $('mobile-menu').classList.toggle('open');
+  });
+  // Close on outside tap
+  document.addEventListener('click', e => {
+    if (!$('hamburger').contains(e.target) && !$('mobile-menu').contains(e.target)) {
+      $('mobile-menu').classList.remove('open');
+    }
+  });
+
+  // Mobile menu button mirrors
+  $('refresh-btn-m').onclick = () => {
+    $('mobile-menu').classList.remove('open');
+    $('refresh-btn').click();
+  };
+  $('settings-btn-m').onclick = () => {
+    $('mobile-menu').classList.remove('open');
+    showSetupModal();
+  };
+  $('sign-out-btn-m').onclick = () => $('sign-out-btn').click();
 }
 
 function updateTodayDate() {
@@ -1384,6 +1498,7 @@ function renderDateStrip(eventsForDots = []) {
       }
       renderDateStrip(allEvents);
       renderLanes();
+      renderSwipeLanes();
       renderEvents();
       updateDateLabel();
     });
@@ -1463,6 +1578,7 @@ async function loadCalendars() {
 
   renderDateStrip(allEvents);
   renderLanes();
+  renderSwipeLanes();
   renderEvents();
   updateStats();
 }
@@ -1514,7 +1630,7 @@ function renderLanes() {
     // Gear button → popover
     lane.querySelector('.lane-cfg-btn').addEventListener('click', (e) => {
       e.stopPropagation();
-      openLanePopover(lane, idx);
+      openLanePopover(lane, idx, e.currentTarget);
     });
 
     const evContainer = lane.querySelector(`#lane-events-${idx}`);
@@ -1544,9 +1660,10 @@ function renderLanes() {
   });
 }
 
-function openLanePopover(lane, idx) {
+function openLanePopover(lane, idx, triggerBtn) {
   // Close any existing popovers
   document.querySelectorAll('.lane-popover').forEach(p => p.remove());
+  document.querySelectorAll('.lane-cfg-btn.active').forEach(b => b.classList.remove('active'));
 
   const prefs = getLanePrefs(idx);
   const pop = document.createElement('div');
@@ -1574,7 +1691,25 @@ function openLanePopover(lane, idx) {
       <input type="checkbox" class="cfg-toggle" id="cfg-badge-${idx}" ${prefs.showBadge ? 'checked' : ''}>
     </div>
   `;
-  lane.appendChild(pop);
+  // Append to body so it isn't clipped by overflow:hidden on lane
+  document.body.appendChild(pop);
+
+  // Position: prefer above the button, fall back to below if not enough room
+  triggerBtn.classList.add('active');
+  const rect = triggerBtn.getBoundingClientRect();
+  const popH = 230; // approximate height
+  const spaceAbove = rect.top;
+  const spaceBelow = window.innerHeight - rect.bottom;
+  let top, left;
+  if (spaceAbove >= popH || spaceAbove >= spaceBelow) {
+    top = rect.top - popH - 6 + window.scrollY;
+  } else {
+    top = rect.bottom + 6 + window.scrollY;
+  }
+  left = Math.min(rect.right - 220, window.innerWidth - 228) + window.scrollX;
+  left = Math.max(left, 8 + window.scrollX);
+  pop.style.top = top + 'px';
+  pop.style.left = left + 'px';
 
   // Live-save on any change
   pop.querySelectorAll('input').forEach(input => {
@@ -1594,12 +1729,116 @@ function openLanePopover(lane, idx) {
   // Close on outside click
   setTimeout(() => {
     document.addEventListener('click', function handler(e) {
-      if (!pop.contains(e.target)) {
+      if (!pop.contains(e.target) && e.target !== triggerBtn) {
         pop.remove();
+        triggerBtn.classList.remove('active');
         document.removeEventListener('click', handler);
       }
     });
   }, 0);
+}
+
+// ─────────────────────────────────────────────
+//  SWIPEABLE LANES (mobile)
+// ─────────────────────────────────────────────
+let swipeIndex = 0;
+
+function renderSwipeLanes() {
+  const track = $('lanes-swipe-track');
+  const dots = $('swipe-dots');
+  if (!track) return;
+  track.innerHTML = '';
+  dots.innerHTML = '';
+
+  const dateFiltered = selectedDate
+    ? allEvents.filter(ev => getEventStart(ev) >= startOfDay(selectedDate))
+    : allEvents;
+
+  members.forEach((member, idx) => {
+    const prefs = getLanePrefs(idx);
+    const isChild = member.role === 'child';
+    const memberEvents = dateFiltered
+      .filter(ev => {
+        if (!ev._memberIndices || !ev._memberIndices.includes(idx)) return false;
+        return prefs.namedOnly ? ev._isNameMatched : true;
+      })
+      .slice(0, prefs.maxEvents);
+
+    const lane = document.createElement('div');
+    lane.className = 'lane';
+    lane.innerHTML = `
+      <div class="lane-header">
+        <div class="lane-avatar">${initials(member.name)}</div>
+        <div class="lane-name">
+          ${member.name}
+          ${prefs.showBadge ? `<span class="role-badge ${isChild ? 'child' : 'parent'}">${isChild ? 'child' : 'parent'}</span>` : ''}
+        </div>
+        <div class="lane-count">${memberEvents.length}</div>
+        <button class="lane-cfg-btn" data-idx="${idx}" title="Configure lane">⚙</button>
+      </div>
+      <div class="lane-events" id="swipe-lane-events-${idx}"></div>
+    `;
+    track.appendChild(lane);
+
+    lane.querySelector('.lane-cfg-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      openLanePopover(lane, idx, e.currentTarget);
+    });
+
+    const evContainer = lane.querySelector(`#swipe-lane-events-${idx}`);
+    if (!memberEvents.length) {
+      evContainer.innerHTML = `<div class="empty">${prefs.namedOnly ? `No events containing "${member.name}"` : 'No upcoming events'}</div>`;
+    } else {
+      memberEvents.forEach(ev => {
+        const start = getEventStart(ev);
+        const isAllDay = !ev.start.dateTime;
+        const div = document.createElement('div');
+        div.className = 'lane-event';
+        const metaParts = [];
+        if (prefs.showDate) metaParts.push(`<span class="lane-event-date">${shortDate(start)}</span>`);
+        if (prefs.showTime && !isAllDay) metaParts.push(`<span class="lane-event-time">${formatTime(ev.start.dateTime)}</span>`);
+        else if (prefs.showTime && isAllDay) metaParts.push(`<span class="lane-event-time">All day</span>`);
+        div.innerHTML = `
+          <div class="lane-event-title">${ev.summary || '(No title)'}</div>
+          ${metaParts.length ? `<div class="lane-event-meta">${metaParts.join('<span style="opacity:0.3">·</span>')}</div>` : ''}
+        `;
+        evContainer.appendChild(div);
+      });
+    }
+
+    // Dot
+    const dot = document.createElement('div');
+    dot.className = 'swipe-dot' + (idx === swipeIndex ? ' active' : '');
+    dots.appendChild(dot);
+  });
+
+  updateSwipePosition();
+
+  $('swipe-prev').onclick = () => { swipeIndex = Math.max(0, swipeIndex - 1); updateSwipePosition(); };
+  $('swipe-next').onclick = () => { swipeIndex = Math.min(members.length - 1, swipeIndex + 1); updateSwipePosition(); };
+
+  // Touch swipe support
+  let touchStartX = 0;
+  track.addEventListener('touchstart', e => { touchStartX = e.touches[0].clientX; }, { passive: true });
+  track.addEventListener('touchend', e => {
+    const dx = e.changedTouches[0].clientX - touchStartX;
+    if (Math.abs(dx) > 40) {
+      if (dx < 0) swipeIndex = Math.min(members.length - 1, swipeIndex + 1);
+      else swipeIndex = Math.max(0, swipeIndex - 1);
+      updateSwipePosition();
+    }
+  }, { passive: true });
+}
+
+function updateSwipePosition() {
+  const track = $('lanes-swipe-track');
+  if (!track) return;
+  track.style.transform = `translateX(-${swipeIndex * 100}%)`;
+  document.querySelectorAll('.swipe-dot').forEach((d, i) => {
+    d.classList.toggle('active', i === swipeIndex);
+  });
+  $('swipe-prev').disabled = swipeIndex === 0;
+  $('swipe-next').disabled = swipeIndex === members.length - 1;
 }
 
 // ─────────────────────────────────────────────
