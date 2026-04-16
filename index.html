@@ -976,7 +976,7 @@
 //  CONFIGURATION — replace CLIENT_ID with yours
 // ─────────────────────────────────────────────
 const CONFIG = {
-  CLIENT_ID: '989016016430-9mjfg95r67vn7v0p6segc8e40so33lp1.apps.googleusercontent.com',
+  CLIENT_ID: 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com',
   SCOPES: [
     'https://www.googleapis.com/auth/calendar.readonly',
     'https://www.googleapis.com/auth/tasks',
@@ -1234,6 +1234,7 @@ function normaliseMembersFromCache(raw) {
 }
 
 async function onSignedIn() {
+  console.log('[Schmuug] onSignedIn called');
   // Fetch profile (non-blocking)
   fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
     headers: { Authorization: `Bearer ${accessToken}` }
@@ -1251,10 +1252,12 @@ async function onSignedIn() {
 
   // Try local cache first for instant load, then verify against Drive
   const cached = loadConfigFromCache();
+  console.log('[Schmuug] Cache result:', cached ? JSON.stringify(cached).slice(0,200) : 'null');
   if (cached?.calendarId && cached?.members?.length) {
     calendarId = cached.calendarId;
     members = normaliseMembersFromCache(cached.members);
     if (cached.lanePrefs) lanePrefs = cached.lanePrefs;
+    console.log('[Schmuug] Cache hit — showing dashboard');
     $('silent-loading').style.display = 'none';
     showDashboard();
     // Silently sync Drive config in background to pick up changes from other devices
@@ -1273,14 +1276,18 @@ async function onSignedIn() {
   }
 
   // No cache — fetch from Drive (first load on new device)
+  console.log('[Schmuug] No cache, trying Drive...');
   const driveCfg = await loadConfigFromDrive();
+  console.log('[Schmuug] Drive result:', driveCfg ? JSON.stringify(driveCfg).slice(0,200) : 'null');
   $('silent-loading').style.display = 'none';
 
   if (driveCfg?.calendarId && driveCfg?.members?.length) {
+    console.log('[Schmuug] Drive config found — showing dashboard');
     calendarId = driveCfg.calendarId;
     members = normaliseMembersFromCache(driveCfg.members);
     showDashboard();
   } else {
+    console.warn('[Schmuug] No config found anywhere — showing setup modal');
     showSetupModal();
   }
 }
@@ -1600,8 +1607,12 @@ async function loadAllData() {
 }
 
 async function loadCalendars() {
+  console.log('[Schmuug] loadCalendars start, calendarId:', calendarId, 'members:', members.length, 'accessToken:', accessToken ? 'present' : 'MISSING');
   allEvents = [];
-  if (!calendarId) { renderDateStrip([]); renderLanes(); renderEvents(); updateStats(); return; }
+  if (!calendarId) {
+    console.warn('[Schmuug] No calendarId — skipping fetch');
+    renderDateStrip([]); renderLanes(); renderEvents(); updateStats(); return;
+  }
 
   const now = new Date();
   const end = new Date(now);
@@ -1612,9 +1623,12 @@ async function loadCalendars() {
     + `timeMin=${now.toISOString()}&timeMax=${end.toISOString()}`
     + `&singleEvents=true&orderBy=startTime&maxResults=100`;
 
+  console.log('[Schmuug] Fetching:', url);
   try {
     const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+    console.log('[Schmuug] Calendar fetch status:', res.status);
     const data = await res.json();
+    console.log('[Schmuug] Calendar response:', JSON.stringify(data).slice(0, 200));
     if (data.error) throw new Error(data.error.message);
 
     const events = data.items || [];
