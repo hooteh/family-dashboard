@@ -976,7 +976,7 @@
 //  CONFIGURATION — replace CLIENT_ID with yours
 // ─────────────────────────────────────────────
 const CONFIG = {
-  CLIENT_ID: '989016016430-9mjfg95r67vn7v0p6segc8e40so33lp1.apps.googleusercontent.com',
+  CLIENT_ID: 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com',
   SCOPES: [
     'https://www.googleapis.com/auth/calendar.readonly',
     'https://www.googleapis.com/auth/tasks',
@@ -1041,14 +1041,18 @@ async function saveConfigToDrive(cal, m, lp) {
 async function loadConfigFromDrive() {
   try {
     // 1. Search appDataFolder for our config file
-    const search = await fetch(
-      `https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=name='${DRIVE_CONFIG_FILENAME}'&fields=files(id,name)`,
-      { headers: { Authorization: `Bearer ${accessToken}` } }
-    );
-    const result = await search.json();
-    if (result.error) throw new Error(result.error.message);
-
-    const files = result.files || [];
+    // Try current filename, then legacy filename from before rebrand
+    const tryNames = [DRIVE_CONFIG_FILENAME, 'family-dashboard-config.json'];
+    let files = [];
+    for (const name of tryNames) {
+      const search = await fetch(
+        `https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=name='${name}'&fields=files(id,name)`,
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      );
+      const result = await search.json();
+      if (result.error) throw new Error(result.error.message);
+      if (result.files?.length) { files = result.files; break; }
+    }
     if (!files.length) return null; // no config saved yet
 
     driveConfigFileId = files[0].id;
@@ -1071,9 +1075,17 @@ async function loadConfigFromDrive() {
 
 function loadConfigFromCache() {
   try {
-    const raw = localStorage.getItem('schmuug_config_cache');
+    // Try current key first, fall back to legacy key from before rebrand
+    const raw = localStorage.getItem('schmuug_config_cache')
+             || localStorage.getItem('family_config_cache');
     if (!raw) return null;
-    return JSON.parse(raw);
+    const cfg = JSON.parse(raw);
+    // Migrate legacy key to new key if needed
+    if (!localStorage.getItem('schmuug_config_cache') && raw) {
+      localStorage.setItem('schmuug_config_cache', raw);
+      localStorage.removeItem('family_config_cache');
+    }
+    return cfg;
   } catch { return null; }
 }
 
@@ -1171,7 +1183,7 @@ function initGoogleAuth() {
   });
 
   // Try silent sign-in on page load if we have a previous hint
-  const hint = localStorage.getItem('schmuug_gsi_hint');
+  const hint = localStorage.getItem('schmuug_gsi_hint') || localStorage.getItem('gsi_hint');
   if (hint) {
     isSilentAttempt = true;
     $('auth-inner').style.display = 'none';
@@ -1197,7 +1209,7 @@ function scheduleTokenRefresh(expiresInSeconds) {
   if (tokenExpiryTimer) clearTimeout(tokenExpiryTimer);
   const refreshIn = Math.max((expiresInSeconds - 300) * 1000, 30000);
   tokenExpiryTimer = setTimeout(() => {
-    const hint = localStorage.getItem('schmuug_gsi_hint');
+    const hint = localStorage.getItem('schmuug_gsi_hint') || localStorage.getItem('gsi_hint');
     if (hint && accessToken) {
       tokenClient.requestAccessToken({ prompt: '', login_hint: hint });
     }
@@ -1234,7 +1246,6 @@ async function onSignedIn() {
   // Show a loading state while we check Drive
   $('auth-screen').style.display = 'none';
   $('silent-loading').style.display = 'flex';
-  $('silent-loading').querySelector('div:nth-child(2)').textContent = 'Loading your family config…';
 
   // Try local cache first for instant load, then verify against Drive
   const cached = loadConfigFromCache();
