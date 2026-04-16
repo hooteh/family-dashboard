@@ -976,7 +976,7 @@
 //  CONFIGURATION — replace CLIENT_ID with yours
 // ─────────────────────────────────────────────
 const CONFIG = {
-  CLIENT_ID: '989016016430-9mjfg95r67vn7v0p6segc8e40so33lp1.apps.googleusercontent.com',
+  CLIENT_ID: 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com',
   SCOPES: [
     'https://www.googleapis.com/auth/calendar.readonly',
     'https://www.googleapis.com/auth/tasks',
@@ -1219,6 +1219,20 @@ window.addEventListener('load', () => {
 // ─────────────────────────────────────────────
 //  POST SIGN-IN FLOW
 // ─────────────────────────────────────────────
+
+// Ensure members loaded from cache have all required fields,
+// even if they were saved by an older version of the config
+function normaliseMembersFromCache(raw) {
+  return (raw || []).map((m, i) => ({
+    name:         m.name         || `Member ${i+1}`,
+    role:         m.role         || 'parent',
+    taskListType: m.taskListType || 'named',
+    taskListName: m.taskListName || m.calendarId || '', // calendarId was old field
+    taskListId:   m.taskListId   || null,
+    color:        m.color        || MEMBER_COLORS[i] || 'var(--m1)'
+  }));
+}
+
 async function onSignedIn() {
   // Fetch profile (non-blocking)
   fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
@@ -1239,7 +1253,7 @@ async function onSignedIn() {
   const cached = loadConfigFromCache();
   if (cached?.calendarId && cached?.members?.length) {
     calendarId = cached.calendarId;
-    members = cached.members;
+    members = normaliseMembersFromCache(cached.members);
     if (cached.lanePrefs) lanePrefs = cached.lanePrefs;
     $('silent-loading').style.display = 'none';
     showDashboard();
@@ -1249,7 +1263,7 @@ async function onSignedIn() {
         const changed = JSON.stringify(driveCfg) !== JSON.stringify({ calendarId, members });
         if (changed) {
           calendarId = driveCfg.calendarId;
-          members = driveCfg.members;
+          members = normaliseMembersFromCache(driveCfg.members);
           if (driveCfg.lanePrefs) lanePrefs = driveCfg.lanePrefs;
           loadAllData(); // refresh data with updated config
         }
@@ -1264,7 +1278,7 @@ async function onSignedIn() {
 
   if (driveCfg?.calendarId && driveCfg?.members?.length) {
     calendarId = driveCfg.calendarId;
-    members = driveCfg.members;
+    members = normaliseMembersFromCache(driveCfg.members);
     showDashboard();
   } else {
     showSetupModal();
@@ -1616,7 +1630,7 @@ async function loadCalendars() {
       return {
         ...ev,
         _memberName: isNameMatched ? matched.map(m => m.name).join(', ') : 'Family',
-        _memberColor: assignedMembers[0].color,
+        _memberColor: (assignedMembers[0] && assignedMembers[0].color) || 'var(--m1)',
         _memberIndices: assignedMembers.map(m => members.indexOf(m)),
         _isNameMatched: isNameMatched
       };
@@ -1624,6 +1638,8 @@ async function loadCalendars() {
 
   } catch(err) {
     console.error('Calendar load error:', err);
+    $('events-list').innerHTML = `<div class="error-banner">Calendar error: ${err.message}. Check your Calendar ID in Settings.</div>`;
+    $('lanes-grid').innerHTML = `<div class="error-banner">Could not load calendar events.</div>`;
   }
 
   renderDateStrip(allEvents);
@@ -1637,6 +1653,7 @@ async function loadCalendars() {
 //  RENDER LANES
 // ─────────────────────────────────────────────
 function renderLanes() {
+  try {
   const grid = $('lanes-grid');
   // Close any open popovers first
   document.querySelectorAll('.lane-popover').forEach(p => p.remove());
@@ -1708,6 +1725,7 @@ function renderLanes() {
       evContainer.appendChild(div);
     });
   });
+  } catch(e) { console.error('renderLanes error:', e); }
 }
 
 function openLanePopover(lane, idx, triggerBtn) {
