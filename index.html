@@ -259,18 +259,19 @@
   }
   .card-title {
     font-family: 'Playfair Display', serif;
-    font-size: 1.05rem;
+    font-size: 1.1rem;
     display: flex;
     align-items: center;
     gap: 8px;
   }
   .card-title .icon { font-size: 1rem; }
-  .card-meta { font-size: 0.75rem; color: var(--muted); }
+  .card-meta { font-size: 0.8rem; color: var(--muted); }
 
   /* ── UPCOMING EVENTS — compact table ── */
   .events-table {
     width: 100%;
     border-collapse: collapse;
+    table-layout: fixed; /* prevents columns expanding beyond container */
   }
   .events-table tr {
     border-bottom: 1px solid var(--border);
@@ -280,21 +281,21 @@
   .events-table tr:hover { background: rgba(255,255,255,0.025); }
 
   .ev-date-col {
-    width: 60px;
-    padding: 4px 10px 4px 0;
+    width: 52px;
+    padding: 6px 8px 6px 0;
     vertical-align: middle;
     white-space: nowrap;
   }
   .ev-date-day {
-    font-size: 0.65rem;
+    font-size: 0.72rem;
     text-transform: uppercase;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.04em;
     color: var(--muted);
     line-height: 1.3;
   }
   .ev-date-num {
     font-family: 'Playfair Display', serif;
-    font-size: 1.05rem;
+    font-size: 1.15rem;
     line-height: 1;
     color: var(--text);
   }
@@ -302,43 +303,45 @@
   .ev-date-col.today-date .ev-date-num { color: var(--accent); }
 
   .ev-dot-col {
-    width: 14px;
-    padding: 4px 6px 4px 0;
+    width: 16px;
+    padding: 6px 6px 6px 0;
     vertical-align: middle;
   }
   .ev-dot {
-    width: 7px; height: 7px;
+    width: 8px; height: 8px;
     border-radius: 50%;
     display: inline-block;
   }
 
   .ev-title-col {
-    padding: 4px 8px 4px 0;
+    padding: 6px 6px 6px 0;
     vertical-align: middle;
+    width: auto; /* take all remaining space */
+    overflow: hidden;
   }
   .ev-title {
-    font-size: 0.8rem;
+    font-size: 0.9rem;
     font-weight: 500;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 280px;
   }
   .ev-time {
-    font-size: 0.68rem;
+    font-size: 0.75rem;
     color: var(--muted);
-    margin-top: 1px;
+    margin-top: 2px;
   }
 
   .ev-who-col {
-    width: 68px;
-    padding: 4px 0;
+    width: 1%;           /* shrink to content */
+    white-space: nowrap;
+    padding: 6px 0 6px 4px;
     vertical-align: middle;
     text-align: right;
   }
   .ev-who {
-    font-size: 0.72rem;   /* min 11px */
-    padding: 2px 7px;
+    font-size: 0.75rem;
+    padding: 3px 8px;
     border-radius: 99px;
     font-weight: 600;
     display: inline-block;
@@ -371,10 +374,10 @@
     border-bottom: 2px solid;
   }
   .lane-avatar {
-    width: 32px; height: 32px;
+    width: 34px; height: 34px;
     border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
-    font-weight: 700; font-size: 0.85rem;
+    font-weight: 700; font-size: 0.9rem;
     flex-shrink: 0;
     position: relative;
   }
@@ -383,12 +386,21 @@
     content: attr(data-shape);
     position: absolute;
     bottom: -3px; right: -3px;
-    font-size: 0.5rem;
+    font-size: 0.55rem;
     line-height: 1;
     opacity: 0.85;
   }
-  .lane-name { font-weight: 500; font-size: 0.9rem; }
-  .lane-count { margin-left: auto; font-size: 0.7rem; color: var(--muted); }
+  .lane-name {
+    font-weight: 600;
+    font-size: 0.95rem;
+    flex: 1;           /* take remaining space — eliminates gap before count */
+    min-width: 0;      /* allow text truncation if needed */
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex-wrap: wrap;
+  }
+  .lane-count { font-size: 0.75rem; color: var(--muted); flex-shrink: 0; }
 
   .lane:nth-child(1) .lane-header { border-color: var(--m1); }
   .lane:nth-child(2) .lane-header { border-color: var(--m2); }
@@ -407,13 +419,13 @@
   .lane-events { display: flex; flex-direction: column; gap: 6px; }
 
   .lane-event {
-    padding: 7px 9px;
-    border-radius: 7px;
+    padding: 8px 10px;
+    border-radius: 8px;
     background: rgba(255,255,255,0.04);
-    font-size: 0.8rem;
+    font-size: 0.9rem;
   }
-  .lane-event-title { font-weight: 500; line-height: 1.3; }
-  .lane-event-meta { color: var(--muted); font-size: 0.72rem; margin-top: 2px; display: flex; gap: 6px; } /* min 11px */
+  .lane-event-title { font-weight: 500; line-height: 1.4; }
+  .lane-event-meta { color: var(--muted); font-size: 0.78rem; margin-top: 3px; display: flex; gap: 6px; }
   .lane-event-time { }
   .lane-event-date { }
 
@@ -507,8 +519,8 @@
   .task-item.done .task-title { text-decoration: line-through; color: var(--muted); }
 
   .task-body { flex: 1; }
-  .task-title { font-size: 0.875rem; }
-  .task-due { font-size: 0.72rem; color: var(--muted); margin-top: 2px; }
+  .task-title { font-size: 0.95rem; line-height: 1.4; }
+  .task-due { font-size: 0.78rem; color: var(--muted); margin-top: 2px; }
 
   .add-task-row {
     display: flex;
@@ -567,10 +579,10 @@
   }
   .summary-stat .val {
     font-family: 'Playfair Display', serif;
-    font-size: 2rem;
+    font-size: 2.2rem;
     line-height: 1;
   }
-  .summary-stat .lbl { font-size: 0.72rem; color: var(--muted); margin-top: 4px; }
+  .summary-stat .lbl { font-size: 0.8rem; color: var(--muted); margin-top: 4px; }
 
   /* ── DATE STRIP ── */
   .date-strip {
@@ -641,7 +653,7 @@
     display: flex; align-items: center; gap: 8px;
     margin-bottom: 0.6rem; padding-bottom: 6px;
     border-bottom: 2px solid;
-    font-size: 0.82rem; font-weight: 500;
+    font-size: 0.9rem; font-weight: 600;
   }
   .task-lane:nth-child(1) .task-lane-header { border-color: var(--m1); color: var(--m1); }
   .task-lane:nth-child(2) .task-lane-header { border-color: var(--m2); color: var(--m2); }
@@ -666,14 +678,14 @@
 
   /* ── ROLE BADGES ── */
   .role-badge {
-    font-size: 0.68rem;   /* min 11px */
+    font-size: 0.7rem;
     padding: 2px 6px;
     border-radius: 4px;
     font-weight: 700;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.03em;
     text-transform: uppercase;
-    margin-left: 4px;
     vertical-align: middle;
+    flex-shrink: 0;
   }
   .role-badge.parent { background: rgba(245,200,66,0.2); color: #f5c842; }
   .role-badge.child  { background: rgba(123,184,248,0.2); color: #7bb8f8; }
@@ -1112,7 +1124,7 @@
 //  CONFIGURATION — replace CLIENT_ID with yours
 // ─────────────────────────────────────────────
 const CONFIG = {
-  CLIENT_ID: '989016016430-9mjfg95r67vn7v0p6segc8e40so33lp1.apps.googleusercontent.com',
+  CLIENT_ID: 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com',
   SCOPES: [
     'https://www.googleapis.com/auth/calendar.readonly',
     'https://www.googleapis.com/auth/tasks',
