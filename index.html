@@ -316,8 +316,8 @@
   .ev-title-col {
     padding: 6px 6px 6px 0;
     vertical-align: middle;
-    width: auto; /* take all remaining space */
     overflow: hidden;
+    /* width: auto — takes remaining space after fixed cols */
   }
   .ev-title {
     font-size: 0.9rem;
@@ -333,19 +333,27 @@
   }
 
   .ev-who-col {
-    width: 1%;           /* shrink to content */
-    white-space: nowrap;
+    width: 72px;         /* fixed — wide enough for short names on any screen */
     padding: 6px 0 6px 4px;
     vertical-align: middle;
     text-align: right;
+    overflow: hidden;
   }
   .ev-who {
-    font-size: 0.75rem;
-    padding: 3px 8px;
+    font-size: 0.72rem;
+    padding: 3px 7px;
     border-radius: 99px;
     font-weight: 600;
     display: inline-block;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;     /* never wider than the column */
+  }
+
+  /* On very narrow screens, hide the who-pill to give title room to breathe */
+  @media (max-width: 360px) {
+    .ev-who-col { display: none; }
   }
 
   /* ── SCHEDULE LANES ── */
@@ -1132,7 +1140,7 @@
 //  CONFIGURATION — replace CLIENT_ID with yours
 // ─────────────────────────────────────────────
 const CONFIG = {
-  CLIENT_ID: '989016016430-9mjfg95r67vn7v0p6segc8e40so33lp1.apps.googleusercontent.com',
+  CLIENT_ID: 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com',
   SCOPES: [
     'https://www.googleapis.com/auth/calendar.readonly',
     'https://www.googleapis.com/auth/tasks',
