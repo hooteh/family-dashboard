@@ -393,12 +393,20 @@
   .lane-name {
     font-weight: 600;
     font-size: 0.95rem;
-    flex: 1;           /* take remaining space — eliminates gap before count */
-    min-width: 0;      /* allow text truncation if needed */
+    flex: 1;
+    min-width: 0;
     display: flex;
     align-items: center;
     gap: 5px;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    overflow: hidden;
+  }
+  /* Name text truncates; badge never wraps */
+  .lane-name > span:first-child {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
   }
   .lane-count { font-size: 0.75rem; color: var(--muted); flex-shrink: 0; }
 
@@ -1124,7 +1132,7 @@
 //  CONFIGURATION — replace CLIENT_ID with yours
 // ─────────────────────────────────────────────
 const CONFIG = {
-  CLIENT_ID: '989016016430-9mjfg95r67vn7v0p6segc8e40so33lp1.apps.googleusercontent.com',
+  CLIENT_ID: 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com',
   SCOPES: [
     'https://www.googleapis.com/auth/calendar.readonly',
     'https://www.googleapis.com/auth/tasks',
@@ -1855,7 +1863,7 @@ function renderLanes() {
       <div class="lane-header">
         <div class="lane-avatar" data-shape="${MEMBER_SHAPES[idx]}" aria-hidden="true">${initials(member.name)}</div>
         <div class="lane-name">
-          ${member.name}
+          <span>${member.name}</span>
           ${prefs.showBadge ? `<span class="role-badge ${isChild ? 'child' : 'parent'}">${isChild ? 'child' : 'parent'}</span>` : ''}
         </div>
         <div class="lane-count" aria-label="${memberEvents.length} events">${memberEvents.length}</div>
@@ -2034,7 +2042,7 @@ function renderSwipeLanes() {
       <div class="lane-header">
         <div class="lane-avatar" data-shape="${MEMBER_SHAPES[idx]}" aria-hidden="true">${initials(member.name)}</div>
         <div class="lane-name">
-          ${member.name}
+          <span>${member.name}</span>
           ${prefs.showBadge ? `<span class="role-badge ${isChild ? 'child' : 'parent'}">${isChild ? 'child' : 'parent'}</span>` : ''}
         </div>
         <div class="lane-count" aria-label="${memberEvents.length} events">${memberEvents.length}</div>
